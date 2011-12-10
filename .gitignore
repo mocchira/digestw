@@ -1,0 +1,4 @@
+#files compiled
+*.6
+#files executable
+batch/digestw_crawler
