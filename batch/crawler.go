@@ -18,6 +18,12 @@ import (
 	"strconv"
 	"json"
 	"github.com/mrjones/oauth"
+	"launchpad.net/mgo"
+)
+
+var (
+	sa   *StatsAll
+	sess *mgo.Session
 )
 
 func decode() []TwStatus {
@@ -30,41 +36,30 @@ func decode() []TwStatus {
 }
 
 func addStats(twstats *TwStatus) {
-	SetStatsTime(twstats.Created_at)
-	pstats := GetTotalStats(ST_TWEET)
-	pstats.Add(TU_SUFFIX_TOTAL)
-	pstats = GetHourStats(ST_TWEET)
-	pstats.Add(TU_SUFFIX_TOTAL)
-	pstats = GetDayStats(ST_TWEET)
-	pstats.Add(TU_SUFFIX_TOTAL)
-	pstats = GetWeekStats(ST_TWEET)
-	pstats.Add(TU_SUFFIX_TOTAL)
-	pstats = GetMonthStats(ST_TWEET)
-	pstats.Add(TU_SUFFIX_TOTAL)
+	sa.SetStatsTime(twstats.Created_at)
+	sa.Total.Tweets.Add(KIND_TWEET, 1)
+	hs := sa.GetHourStatsUnit()
+	hs.Tweets.Add(KIND_TWEET, 1)
+	ds := sa.GetDayStatsUnit()
+	ds.Tweets.Add(KIND_TWEET, 1)
+	ws := sa.GetWeekStatsUnit()
+	ws.Tweets.Add(KIND_TWEET, 1)
+	ms := sa.GetMonthStatsUnit()
+	ms.Tweets.Add(KIND_TWEET, 1)
 	if twstats.Place != nil {
-		pstats = GetTotalStats(ST_PLACE)
-		pstats.Add(twstats.Place.Full_Name)
-		pstats = GetHourStats(ST_PLACE)
-		pstats.Add(twstats.Place.Full_Name)
-		pstats = GetDayStats(ST_PLACE)
-		pstats.Add(twstats.Place.Full_Name)
-		pstats = GetWeekStats(ST_PLACE)
-		pstats.Add(twstats.Place.Full_Name)
-		pstats = GetMonthStats(ST_PLACE)
-		pstats.Add(twstats.Place.Full_Name)
+		sa.Total.GetPlacesStats().Add(twstats.Place.Full_Name, 1)
+		hs.GetPlacesStats().Add(twstats.Place.Full_Name, 1)
+		ds.GetPlacesStats().Add(twstats.Place.Full_Name, 1)
+		ws.GetPlacesStats().Add(twstats.Place.Full_Name, 1)
+		ms.GetPlacesStats().Add(twstats.Place.Full_Name, 1)
 	}
 	if twstats.Entities != nil {
 		for _, v := range twstats.Entities.User_Mentions {
-			pstats = GetTotalStats(ST_MENTION)
-			pstats.Add(v.Screen_Name)
-			pstats = GetHourStats(ST_MENTION)
-			pstats.Add(v.Screen_Name)
-			pstats = GetDayStats(ST_MENTION)
-			pstats.Add(v.Screen_Name)
-			pstats = GetWeekStats(ST_MENTION)
-			pstats.Add(v.Screen_Name)
-			pstats = GetMonthStats(ST_MENTION)
-			pstats.Add(v.Screen_Name)
+			sa.Total.GetMentionsStats().Add(v.Screen_Name, 1)
+			hs.GetMentionsStats().Add(v.Screen_Name, 1)
+			ds.GetMentionsStats().Add(v.Screen_Name, 1)
+			ws.GetMentionsStats().Add(v.Screen_Name, 1)
+			ms.GetMentionsStats().Add(v.Screen_Name, 1)
 		}
 		for _, v := range twstats.Entities.Urls {
 			var orgUrl *url.URL
@@ -78,59 +73,55 @@ func addStats(twstats *TwStatus) {
 					continue
 				}
 			}
-			pstats = GetTotalStats(ST_URL)
-			pstats.Add(orgUrl.Raw)
-			pstats = GetHourStats(ST_URL)
-			pstats.Add(orgUrl.Raw)
-			pstats = GetDayStats(ST_URL)
-			pstats.Add(orgUrl.Raw)
-			pstats = GetWeekStats(ST_URL)
-			pstats.Add(orgUrl.Raw)
-			pstats = GetMonthStats(ST_URL)
-			pstats.Add(orgUrl.Raw)
+			sa.Total.GetUrlsStats().Add(orgUrl.Raw, 1)
+			hs.GetUrlsStats().Add(orgUrl.Raw, 1)
+			ds.GetUrlsStats().Add(orgUrl.Raw, 1)
+			ws.GetUrlsStats().Add(orgUrl.Raw, 1)
+			ms.GetUrlsStats().Add(orgUrl.Raw, 1)
 
-			pstats = GetTotalStats(ST_DOMAIN)
-			pstats.Add(orgUrl.Host)
-			pstats = GetHourStats(ST_DOMAIN)
-			pstats.Add(orgUrl.Host)
-			pstats = GetDayStats(ST_DOMAIN)
-			pstats.Add(orgUrl.Host)
-			pstats = GetWeekStats(ST_DOMAIN)
-			pstats.Add(orgUrl.Host)
-			pstats = GetMonthStats(ST_DOMAIN)
-			pstats.Add(orgUrl.Host)
+			sa.Total.GetDomainsStats().Add(orgUrl.Host, 1)
+			hs.GetDomainsStats().Add(orgUrl.Host, 1)
+			ds.GetDomainsStats().Add(orgUrl.Host, 1)
+			ws.GetDomainsStats().Add(orgUrl.Host, 1)
+			ms.GetDomainsStats().Add(orgUrl.Host, 1)
 		}
 		for _, v := range twstats.Entities.Hashtags {
-			pstats = GetTotalStats(ST_HASHTAG)
-			pstats.Add(v.Text)
-			pstats = GetHourStats(ST_HASHTAG)
-			pstats.Add(v.Text)
-			pstats = GetDayStats(ST_HASHTAG)
-			pstats.Add(v.Text)
-			pstats = GetWeekStats(ST_HASHTAG)
-			pstats.Add(v.Text)
-			pstats = GetMonthStats(ST_HASHTAG)
-			pstats.Add(v.Text)
+			sa.Total.GetHashtagsStats().Add(v.Text, 1)
+			hs.GetHashtagsStats().Add(v.Text, 1)
+			ds.GetHashtagsStats().Add(v.Text, 1)
+			ws.GetHashtagsStats().Add(v.Text, 1)
+			ms.GetHashtagsStats().Add(v.Text, 1)
 		}
 	}
-	pstats = GetTotalStats(ST_TWEETER)
-	pstats.Add(twstats.User.Screen_Name)
-	pstats = GetHourStats(ST_TWEETER)
-	pstats.Add(twstats.User.Screen_Name)
-	pstats = GetDayStats(ST_TWEETER)
-	pstats.Add(twstats.User.Screen_Name)
-	pstats = GetWeekStats(ST_TWEETER)
-	pstats.Add(twstats.User.Screen_Name)
-	pstats = GetMonthStats(ST_TWEETER)
-	pstats.Add(twstats.User.Screen_Name)
+	sa.Total.GetTweetersStats().Add(twstats.User.Screen_Name, 1)
+	hs.GetTweetersStats().Add(twstats.User.Screen_Name, 1)
+	ds.GetTweetersStats().Add(twstats.User.Screen_Name, 1)
+	ws.GetTweetersStats().Add(twstats.User.Screen_Name, 1)
+	ms.GetTweetersStats().Add(twstats.User.Screen_Name, 1)
 }
 
-func output(key string, stats *Stats) {
-	log.Printf("key: %s", key)
+func filter(kind, unit string, stats *Stats) {
+	log.Printf("kind: %s unit:%s", kind, unit)
 	keys := stats.Keys()
 	for i := 0; i < len(keys); i++ {
 		log.Printf("rank:%2d key:%s count:%d", i+1, keys[i], stats.Get(keys[i]))
 	}
+}
+
+func update(col string, su *StatsUnit) {
+	var nsu StatsUnit
+	var err os.Error
+	if err = nsu.Find(sess, col, su.UserId, su.UnitId); err != nil && err != mgo.NotFound {
+		panic(err)
+	}
+	if err != mgo.NotFound {
+		su.Add(&nsu)
+	}
+	su.ForeachStats(filter)
+	if _, err = su.Upsert(sess, col, su.UserId, su.UnitId); err != nil {
+		panic(err)
+	}
+	log.Printf("result %v", su)
 }
 
 func main() {
@@ -143,26 +134,36 @@ func main() {
 	flag.Parse()
 	if *jsmode {
 		// js test
+		sa = NewStatsAll("mocchira")
 		tl := decode()
 		for _, v := range tl {
 			addStats(&v)
 		}
-		Foreach(output)
+		var err os.Error
+		sess, err = mgo.Mongo("localhost")
+		if err != nil {
+			panic(err)
+		}
+		defer sess.Close()
+		sa.Foreach(update)
+		//sa.ForeachStats(output)
 		return
 	} else {
-		// http test
-		urls := [...]string{
-			"http://t.co/HPv2ieNu",
-			"http://t.co/3KhOs391",
-			"http://t.co/Re95sQbh",
-		}
-		for _, v := range urls {
-			ret, err := GetFinalURL(v)
-			if err != nil {
-				log.Fatal(err)
+		// mongotest
+		/*
+			sc := NewStatsUnit("mocchira", "23")
+			sc.Places.Set("Tokyo", 2)
+			sc.Places.Set("Yokohama", 999)
+			sc.Mentions.Set("bikki", 999)
+			if err = sc.Insert(session, MGO_COL_STATS_HOUR); err != nil {
+				panic(err)
 			}
-			log.Printf("src:%s dst:%s\n", v, ret)
-		}
+			nsc := NewStatsCol("", "")
+			if err = nsc.Find(session, MGO_COL_STATS_HOUR, "mocchira", ""); err != nil {
+				panic(err)
+			}
+			log.Printf("result %v", nsc)
+		*/
 		return
 	}
 

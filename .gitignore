@@ -2,3 +2,5 @@
 *.6
 #files executable
 batch/digestw_crawler
+#files for tests input
+batch/*.json
