@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"launchpad.net/gobson/bson"
 	"launchpad.net/mgo"
-	//	"log"
+	"github.com/mrjones/oauth"
 )
 
 const (
@@ -23,6 +23,7 @@ const (
 
 const (
 	MGO_DB              = "digestw"
+	MGO_COL_USER        = "user"
 	MGO_COL_STATS_TOTAL = "stats_total"
 	MGO_COL_STATS_HOUR  = "stats_hour"
 	MGO_COL_STATS_DAY   = "stats_day"
@@ -32,6 +33,7 @@ const (
 
 const (
 	REC_MAX_COUNT = 30
+	CRAWL_UNIT    = 10
 )
 
 type Stats struct {
@@ -339,4 +341,33 @@ func (sa *StatsAll) GetMonthStatsUnit() *StatsUnit {
 	su := NewStatsUnit(sa.UserId, key)
 	sa.month = append(sa.month, su)
 	return su
+}
+
+type DigestwUser struct {
+	TwUser            ",inline"
+	oauth.AccessToken ",inline"
+	SinceId           string
+	NextSeconds       int64
+}
+
+func NewDigestwUser(tu *TwUser, at *oauth.AccessToken) *DigestwUser {
+	return &DigestwUser{
+		TwUser:      *tu,
+		AccessToken: *at,
+	}
+}
+
+func (su *DigestwUser) Upsert(sess *mgo.Session) (interface{}, os.Error) {
+	c := sess.DB(MGO_DB).C(MGO_COL_USER)
+	return c.Upsert(bson.M{"screen_name": su.TwUser.Screen_Name}, su)
+}
+
+func (su *DigestwUser) FindOne(sess *mgo.Session, sn string) os.Error {
+	c := sess.DB(MGO_DB).C(MGO_COL_USER)
+	return c.Find(bson.M{"screen_name": sn}).One(su)
+}
+
+func (su *DigestwUser) Find(sess *mgo.Session, ns int64) *mgo.Iter {
+	c := sess.DB(MGO_DB).C(MGO_COL_USER)
+	return c.Find(bson.M{"nextseconds": bson.M{"$lt": ns}}).Limit(CRAWL_UNIT).Iter()
 }

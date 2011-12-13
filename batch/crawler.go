@@ -13,29 +13,35 @@ import (
 	"url"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"strconv"
 	"json"
+	"time"
 	"github.com/mrjones/oauth"
 	"launchpad.net/mgo"
 )
 
+const (
+	MODE_TEST       = "test"
+	MODE_INIT_OAUTH = "oauth"
+	MODE_DEFAULT    = "default"
+)
+
 var (
-	sa   *StatsAll
 	sess *mgo.Session
 )
 
-func decode() []TwStatus {
+func decode(r io.Reader) []TwStatus {
 	var tl []TwStatus
-	dec := json.NewDecoder(os.Stdin)
+	dec := json.NewDecoder(r)
 	if err := dec.Decode(&tl); err != nil {
 		log.Fatal(err)
 	}
 	return tl
 }
 
-func addStats(twstats *TwStatus) {
+func addStats(sa *StatsAll, twstats *TwStatus) {
 	sa.SetStatsTime(twstats.Created_at)
 	sa.Total.Tweets.Add(KIND_TWEET, 1)
 	hs := sa.GetHourStatsUnit()
@@ -112,61 +118,86 @@ func update(col string, su *StatsUnit) {
 	var nsu StatsUnit
 	var err os.Error
 	if err = nsu.Find(sess, col, su.UserId, su.UnitId); err != nil && err != mgo.NotFound {
-		panic(err)
+		log.Print(err)
+		return
 	}
 	if err != mgo.NotFound {
 		su.Add(&nsu)
 	}
 	su.ForeachStats(filter)
 	if _, err = su.Upsert(sess, col, su.UserId, su.UnitId); err != nil {
-		panic(err)
+		log.Print(err)
+		return
 	}
 	log.Printf("result %v", su)
+}
+
+func registUser(r io.Reader, at *oauth.AccessToken) *DigestwUser {
+	var tu TwUser
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(&tu); err != nil {
+		log.Fatal(err)
+	}
+	du := NewDigestwUser(&tu, at)
+	if _, err := du.Upsert(sess); err != nil {
+		log.Fatal(err)
+	}
+	return du
+}
+
+func crawl(c *oauth.Consumer, du *DigestwUser, r io.Reader, count int, done chan<- int) {
+	sa := NewStatsAll(du.TwUser.Screen_Name)
+	params := map[string]string{"include_entities": "true", "count": strconv.Itoa(count)}
+	if r == nil {
+		if du.SinceId != "" {
+			params["since_id"] = du.SinceId
+		}
+		response, err := c.Get(
+			"https://api.twitter.com/1/statuses/home_timeline.json",
+			params,
+			&(du.AccessToken))
+		if err != nil {
+			log.Print(err)
+			done <- 0
+			return
+		}
+		defer response.Body.Close()
+		r = response.Body
+	}
+	tl := decode(r)
+	var sid, first, last int64
+	for k, v := range tl {
+		if k == 0 {
+			sid = v.Id
+			tmp, _ := time.Parse(time.RubyDate, v.Created_at)
+			last = tmp.Seconds()
+		}
+		addStats(sa, &v)
+		if k == (len(tl) - 1) {
+			tmp, _ := time.Parse(time.RubyDate, v.Created_at)
+			first = tmp.Seconds()
+		}
+		log.Printf("id:%d", v.Id)
+	}
+	sa.Foreach(update)
+	// decide to the next execution time
+	du.SinceId = strconv.Itoa64(sid)
+	du.NextSeconds = time.Seconds() + (last - first)
+	if _, err := du.Upsert(sess); err != nil {
+		log.Print(err)
+	}
+	done <- 0
 }
 
 func main() {
 	var consumerKey *string = flag.String("consumerkey", "RMA3YnQen7J0SDX67b5g", "")
 	var consumerSecret *string = flag.String("consumersecret", "87GYFCqZz2k9VLcatBp7cpajzcdxRRPKfa3pMPtgW4", "")
 	var count *int = flag.Int("count", 100, "")
-	var since_id *string = flag.String("since_id", "143280351165415425", "")
-	var jsmode *bool = flag.Bool("js", true, "")
+	var mode *string = flag.String("mode", "default", "")
 
 	flag.Parse()
-	if *jsmode {
-		// js test
-		sa = NewStatsAll("mocchira")
-		tl := decode()
-		for _, v := range tl {
-			addStats(&v)
-		}
-		var err os.Error
-		sess, err = mgo.Mongo("localhost")
-		if err != nil {
-			panic(err)
-		}
-		defer sess.Close()
-		sa.Foreach(update)
-		//sa.ForeachStats(output)
-		return
-	} else {
-		// mongotest
-		/*
-			sc := NewStatsUnit("mocchira", "23")
-			sc.Places.Set("Tokyo", 2)
-			sc.Places.Set("Yokohama", 999)
-			sc.Mentions.Set("bikki", 999)
-			if err = sc.Insert(session, MGO_COL_STATS_HOUR); err != nil {
-				panic(err)
-			}
-			nsc := NewStatsCol("", "")
-			if err = nsc.Find(session, MGO_COL_STATS_HOUR, "mocchira", ""); err != nil {
-				panic(err)
-			}
-			log.Printf("result %v", nsc)
-		*/
-		return
-	}
 
+	// init
 	c := oauth.NewConsumer(
 		*consumerKey,
 		*consumerSecret,
@@ -176,27 +207,63 @@ func main() {
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
 		})
 	c.Debug(true)
-	//requestToken, url, err := c.GetRequestTokenAndUrl("http://www.mocchira.com/")
-	requestToken, url, err := c.GetRequestTokenAndUrl("oob")
+	var err os.Error
+	sess, err = mgo.Mongo("localhost")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
-	fmt.Println("(1) Go to: " + url)
-	fmt.Println("(2) Grant access, you should get back a verification code.")
-	fmt.Println("(3) Enter that verification code here: ")
-	verificationCode := ""
-	fmt.Scanln(&verificationCode)
+	defer sess.Close()
 
-	accessToken, err := c.AuthorizeToken(requestToken, verificationCode)
-	if err != nil {
-		log.Fatal(err)
+	switch *mode {
+	case MODE_TEST:
+		// js test
+		var du DigestwUser
+		du.TwUser.Screen_Name = "mocchira"
+		done := make(chan int)
+		go crawl(c, &du, os.Stdin, *count, done)
+		<-done
+		return
+	case MODE_INIT_OAUTH:
+		requestToken, url, err := c.GetRequestTokenAndUrl("oob")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("(1) Go to: " + url)
+		fmt.Println("(2) Grant access, you should get back a verification code.")
+		fmt.Println("(3) Enter that verification code here: ")
+		verificationCode := ""
+		fmt.Scanln(&verificationCode)
+		accessToken, err := c.AuthorizeToken(requestToken, verificationCode)
+		if err != nil {
+			log.Fatal(err)
+		}
+		response, err := c.Get(
+			"https://api.twitter.com/1/account/verify_credentials.json",
+			map[string]string{"skip_status": "true"},
+			accessToken)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer response.Body.Close()
+		du := registUser(response.Body, accessToken)
+		fmt.Println("id:" + du.TwUser.Screen_Name)
+		return
+	default:
+		idx := 0
+		dulist := [CRAWL_UNIT]DigestwUser{}
+		done := make(chan int)
+		iter := dulist[0].Find(sess, time.Seconds())
+		for iter.Next(&dulist[idx]) {
+			go crawl(c, &dulist[idx], nil, *count, done)
+			idx++
+		}
+		for ; idx > 0; idx-- {
+			<-done
+		}
+		if iter.Err() != nil {
+			log.Fatal(err)
+		}
+		return
 	}
-	response, err := c.Get(
-		"https://api.twitter.com/1/statuses/home_timeline.json",
-		map[string]string{"include_entities": "true", "count": strconv.Itoa(*count), "since_id": *since_id},
-		accessToken)
-	defer response.Body.Close()
-	bits, err := ioutil.ReadAll(response.Body)
-	fmt.Println("Twitter RESPONSE: " + string(bits))
 
 }
