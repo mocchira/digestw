@@ -197,6 +197,20 @@ func main() {
 
 	flag.Parse()
 
+	var err os.Error
+
+	// stop dual executing
+	dl := NewDirProcessLocker("lock")
+	if err = dl.Lock(); err != nil {
+		if (err == ProcessExist) {
+			log.Printf(err.String())
+			return
+		}
+		log.Fatal(err)
+	}
+	//time.Sleep(60 * 1000 * 1000 * 1000)
+	defer dl.Unlock()
+
 	// init
 	c := oauth.NewConsumer(
 		*consumerKey,
@@ -207,7 +221,6 @@ func main() {
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
 		})
 	c.Debug(true)
-	var err os.Error
 	sess, err = mgo.Mongo("localhost")
 	if err != nil {
 		panic(err)
