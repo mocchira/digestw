@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Digestw - Twitter's Timeline Digest</title>
+<meta charset="UTF-8">
+<meta name="description" content="twitter,timeline,digest,">
+<meta name="robots" content="index,follow">
+<link rel="stylesheet" href="/s/a.css">
+<!--[if IE]>
+<meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1" />
+<![endif]-->
+</head>
+<body>
+	<div id="a">
+		<header>
+	  	    	<a href="/" title="Go to Homepage"><strong>Digestw</strong> Twitter's Timeline Digest</a>
+		    	<p>Roughly Speaking, An easy way to retrieve and save hot informations from your timeline.</p>
+		</header>
+		<div id="b">
+		     <article>
+			     <h1>{{.UserId}}</h1>
+<!--
+				<img src="#" alt="#"/>
+				<h2>Select a digest unit!</h2>
+				<h3>Examples Alerts, Notice  &amp; Confirmation</h3>
+				<p>These sample styles for alerts and notices are useful if you want to use the template in content management systems.</p>
+				<p class="highlight-1"><strong>Alert:</strong> This is how an alert looks like.</p>
+				<p class="highlight-2"><strong>Notice:</strong> This is how a notice looks like.</p>
+				<p class="highlight-3"><strong>Confirmation:</strong> This is how a confirmation looks like.</p>
+				-->
+				{{if .Tweets}}
+					<h3>Tweets</h3>
+					<p>{{.Tweets.Samples.Tweet}}</p>
+				{{end}}
+				
+				{{if .Places}}
+					<h3>Places</h3>
+					{{template "table.html" .Places}}
+				{{end}}
+				
+				{{if .Hashtags}}
+					<h3>Hashtags</h3>
+					{{template "table.html" .Hashtags}}
+				{{end}}
+				
+				{{if .Urls}}
+					<h3>Urls</h3>
+					{{template "table.html" .Urls}}
+				{{end}}
+
+				{{if .Domains}}
+					<h3>Domains</h3>
+					{{template "table.html" .Domains}}
+				{{end}}
+	
+				{{if .Mentions}}
+					<h3>Mentions</h3>
+					{{template "table.html" .Mentions}}
+				{{end}}
+
+				{{if .Tweeters}}
+					<h3>Tweeters</h3>
+					{{template "table.html" .Tweeters}}
+				{{end}}
+			</article>
+			
+			<aside>
+				<h4>Search</h4>
+				<form action="#" class="s">
+					<input name="search" type="text" value="Type term and hit enter...">
+				</form>
+				<h4>About the Author</h4>
+				<div id="c">
+					<img src="http://a3.twimg.com/profile_images/675388107/_1265293335_43_normal.png" alt="mocchira">
+				  	<p>a golanger</p>
+					<b>Follow Me</b>
+					<p><a href="http://twitter.com/mocchira" title="Follow @mocchira">Twitter</a></p>
+				</div>
+				<nav>
+					<h4>Link</h4>
+					<ul>
+						<li><a href="http://www.stoic.co.jp/">Stoic</a></li>
+					</ul>
+				</nav>
+			<!--
+				<h4>AdSpace</h4> 
+				<div class="adspace"> 
+					<a href="http://jabz.net/" rel="me"><img src="i/jabz-logo.png" alt="Jabz Internet Marketing GmbH" title="Jabz Internet Marketing GmbH"/></a> 
+				</div>
+				<h4>Example Blogroll</h4>
+				<ul>
+					<li><a href="http://jabz.net/">Jabz Internet Marketing GmbH</a></li>
+					<li><a href="http://jabz.net/contact/jonas-jacek">Jonas Jacek</a></li>
+					<li><a href="http://www.w3.org/">World Wide Web Consortium</a></li>
+					<li><a href="http://www.getfirefox.com/">Firefox Web Browser</a></li>
+				</ul>
+				<h4>Example Tag Cloud</h4>
+				<ul id="tagcloud">
+					<li class="tagcloudsize-1"><a href="#">Lorem</a></li>
+					<li class="tagcloudsize-2"><a href="#">Ipsum</a></li>
+					<li class="tagcloudsize-3"><a href="#">Dolor</a></li>
+					<li class="tagcloudsize-2"><a href="#">Sit Amet</a></li>
+					<li class="tagcloudsize-1"><a href="#">Consectetur</a></li>
+				</ul> 
+			-->
+			</aside>
+		</div>
+		<footer>
+			<p>Template Design &amp; Markup by <a href="http://jabz.net/contact/jonas-jacek">Jonas Jacek</a> | <a href="http://owmx.com/" title="Free HTML5 &amp; CSS3 Web Templates">Free Web Templates</a>.</p>
+		</footer>
+	</div>
+</html>

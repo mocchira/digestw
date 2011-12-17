@@ -1,0 +1,14 @@
+<table>
+	<tbody>
+		<tr>
+			<th>Name</th>
+			<th>Count</th>
+		</tr>
+		{{range .Samples}}
+	    	<tr>
+			<td>{{.|html}}</td>
+			<td>{{.}}</td>
+	    	</tr>
+		{{end}}
+	</tbody>
+</table>

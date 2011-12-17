@@ -147,9 +147,9 @@ func registUser(r io.Reader, at *oauth.AccessToken) *DigestwUser {
 
 func crawl(c *oauth.Consumer, du *DigestwUser, r io.Reader, count int, done chan<- int) {
 	sa := NewStatsAll(du.TwUser.Screen_Name)
-	params := map[string]string{"include_entities": "true", "count": strconv.Itoa(count)}
 	if r == nil {
-		if du.SinceId != "" {
+		params := map[string]string{"include_entities": "true", "count": strconv.Itoa(count)}
+		if du.SinceId != "" && du.SinceId != "0" {
 			params["since_id"] = du.SinceId
 		}
 		response, err := c.Get(

@@ -2,6 +2,7 @@
 *.6
 #files executable
 batch/digestw_crawler
+web/digestw_web
 #files for tests input/output
 *.json
 *.log
