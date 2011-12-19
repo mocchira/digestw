@@ -64,6 +64,12 @@ func (s *Stats) Keys() []string {
 	return s.orderedKeys
 }
 
+func (s *Stats) GenOrderedKeys() {
+	for key, _ := range s.Samples {
+		s.orderedKeys = append(s.orderedKeys, key)
+	}
+}
+
 func (s *Stats) Add(key string, add uint64) {
 	if _, found := s.Samples[key]; !found {
 		s.Samples[key] = 0

@@ -1,0 +1,17 @@
+<table>
+	<tbody>
+		<tr>
+			<th>Name</th>
+			<th>Count</th>
+		</tr>
+		{{$s := .}}
+		{{range .Keys}}
+		<tr>
+			{{$disp := cut . "..." 50|html}}
+			{{$url  := sn2url .}}
+			<td>{{anchor $disp $url}}</td>
+			<td>{{$s.Get .}}</td>
+	    	</tr>
+		{{end}}
+	</tbody>
+</table>

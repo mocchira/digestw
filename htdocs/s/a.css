@@ -62,11 +62,40 @@ SUP {
 	top : -4px;
 }
 
+/* tab */
+#tab {
+	position : relative;
+	border-top: 5px solid #DB0202;
+	color : #FFF;
+	font-size: 16px;
+}
+
+	#tab .selected {
+		-moz-border-radius-bottomleft: 4px;
+		-moz-border-radius-bottomright: 4px;
+		-webkit-border-bottom-left-radius: 4px;
+		-webkit-border-bottom-right-radius: 4px;
+		margin : 0 0 0 10px;
+		padding : 5px 10px;
+		background : #DB0202;
+		float: left;
+	}
+
+	#tab .non {
+		-moz-border-radius-bottomleft: 4px;
+		-moz-border-radius-bottomright: 4px;
+		-webkit-border-bottom-left-radius: 4px;
+		-webkit-border-bottom-right-radius: 4px;
+		margin : 0 0 0 10px;
+		padding : 5px 10px;
+		background : #918C8C;
+		float: left;
+	}
+
 /* Header */	
 header {
-	background : url(http://golang.org/doc/logo.png) no-repeat bottom left;
-	height : 130px;
-	position : relative;
+	/* height : 130px;
+	   position : relative;*/
 	}
 	header a, header p {
 		-moz-border-radius: 4px;
@@ -84,13 +113,10 @@ header {
 	}
 	header p {
 		background : #000;
-		bottom:40px;
 		font-weight: bold;
 		opacity: 0.3;
+		margin  : 10px;
 		padding : 10px;
-		position:absolute;
-		right : 0;
-		width : 400px;
 	}
 
 /* Article */

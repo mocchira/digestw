@@ -4,10 +4,11 @@
 			<th>Name</th>
 			<th>Count</th>
 		</tr>
-		{{range .Samples}}
+		{{$s := .}}
+		{{range .Keys}}
 	    	<tr>
-			<td>{{.|html}}</td>
-			<td>{{.}}</td>
+			<td>{{cut . "..." 50|html}}</td>
+			<td>{{$s.Get .}}</td>
 	    	</tr>
 		{{end}}
 	</tbody>
