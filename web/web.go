@@ -2,26 +2,32 @@ package main
 
 import (
 	"os"
+	"io"
 	"log"
 	"fmt"
+	"flag"
 	"template"
 	"strconv"
+	"strings"
 	"json"
 	"http"
 	"url"
 	"time"
-	web "github.com/hoisie/web.go"
+	"github.com/hoisie/web.go"
 	"launchpad.net/mgo"
+	"github.com/mrjones/oauth"
 )
 
 const (
-	HOME_URL        = "http://192.168.56.101:8080/web/stats/mocchira/total/"
+	HOME_URL        = "http://digestw.stoic.co.jp/web/stats/mocchira/total/"
+	CALLBACK_URL    = "http://digestw.stoic.co.jp/web/callback"
 	ERR_MSG         = "Server Error"
 	STYLE_CLASS_NON = "non"
 	STYLE_CLASS_SEL = "selected"
 )
 
 var (
+	consumer *oauth.Consumer
 	mgoPool  *mgo.Session
 	tplSet   *template.Set
 	unit2col = map[string]string{
@@ -146,6 +152,76 @@ func onSystemError(ctx *web.Context) {
 	ctx.Abort(http.StatusInternalServerError, ERR_MSG)
 }
 
+func setTmpCookie(ctx *web.Context, rt *oauth.RequestToken) {
+	ctx.SetSecureCookie("tmp", rt.Token+","+rt.Secret, 3600)
+}
+
+func getTmpCookie(ctx *web.Context) *oauth.RequestToken {
+	v, found := ctx.GetSecureCookie("tmp")
+	if !found {
+		return nil
+	}
+	rt := strings.Split(v, ",")
+	if len(rt) != 2 {
+		return nil
+	}
+	return &oauth.RequestToken{Token: rt[0], Secret: rt[1]}
+}
+
+func onLogin(ctx *web.Context) {
+	rt, url, err := consumer.GetRequestTokenAndUrl(CALLBACK_URL)
+	if err != nil {
+		onSystemError(ctx)
+		return
+	}
+	setTmpCookie(ctx, rt)
+	ctx.Redirect(http.StatusFound, url)
+}
+
+func registUser(sess *mgo.Session, r io.Reader, at *oauth.AccessToken) *DigestwUser {
+	var tu TwUser
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(&tu); err != nil {
+		return nil
+	}
+	du := NewDigestwUser(&tu, at)
+	if _, err := du.Upsert(sess); err != nil {
+		return nil
+	}
+	return du
+}
+
+func onCallback(ctx *web.Context) {
+	rt := getTmpCookie(ctx)
+	if rt == nil {
+		onSystemError(ctx)
+		return
+	}
+	oauth_verifier := ctx.Request.Params["oauth_verifier"]
+	if oauth_verifier == "" {
+		onSystemError(ctx)
+		return
+	}
+	at, err := consumer.AuthorizeToken(rt, oauth_verifier)
+	if err != nil {
+		onSystemError(ctx)
+		return
+	}
+	response, err := consumer.Get(
+		"https://api.twitter.com/1/account/verify_credentials.json",
+		map[string]string{"skip_status": "true"},
+		at)
+	if err != nil {
+		onSystemError(ctx)
+		return
+	}
+	defer response.Body.Close()
+	sess := mgoPool.New()
+	defer sess.Close()
+	du := registUser(sess, response.Body, at)
+	ctx.Redirect(http.StatusFound, "http://digestw.stoic.co.jp/web/stats/"+du.TwUser.Screen_Name+"/total/")
+}
+
 func onStatsDef(ctx *web.Context) {
 	onStats(ctx, "mocchira", "total", "")
 }
@@ -214,6 +290,20 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 }
 
 func main() {
+	var consumerKey *string = flag.String("consumerkey", "RMA3YnQen7J0SDX67b5g", "")
+	var consumerSecret *string = flag.String("consumersecret", "87GYFCqZz2k9VLcatBp7cpajzcdxRRPKfa3pMPtgW4", "")
+
+	flag.Parse()
+
+	// init
+	consumer = oauth.NewConsumer(
+		*consumerKey,
+		*consumerSecret,
+		oauth.ServiceProvider{
+			RequestTokenUrl:   "https://api.twitter.com/oauth/request_token",
+			AuthorizeTokenUrl: "https://api.twitter.com/oauth/authorize",
+			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
+		})
 	var err os.Error
 	mgoPool, err = mgo.Mongo("localhost")
 	if err != nil {
@@ -248,9 +338,12 @@ func main() {
 	logger := log.New(f, "", log.Ldate|log.Ltime)
 	web.SetLogger(logger)
 	web.Config.StaticDir = "../htdocs"
+	web.Config.CookieSecret = "rep;oijgerke"
 
-	web.Get("/", onStatsDef)
+	web.Get("/web/login", onLogin)
+	web.Get("/web/callback", onCallback)
 	web.Get("/web/stats/([0-9a-zA-Z_]+)/([a-z]+)/([0-9 ]*)", onStats)
-	web.Run("0.0.0.0:8080")
+	web.Get("/web", onStatsDef)
+	web.Run("127.0.0.1:8080")
 
 }
