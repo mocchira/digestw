@@ -229,9 +229,10 @@ type StatsAll struct {
 	month     []*StatsUnit
 	statsTime *time.Time
 	UserId    string
+	sess      *mgo.Session
 }
 
-func NewStatsAll(uid string) *StatsAll {
+func NewStatsAll(uid string, sess *mgo.Session) *StatsAll {
 	return &StatsAll{
 		Total:     NewStatsUnit(uid, ""),
 		hour:      make([]*StatsUnit, 0),
@@ -240,6 +241,7 @@ func NewStatsAll(uid string) *StatsAll {
 		month:     make([]*StatsUnit, 0),
 		statsTime: time.UTC(),
 		UserId:    uid,
+		sess:      sess,
 	}
 }
 
@@ -281,19 +283,19 @@ func (sa *StatsAll) ForeachStats(f func(kind, unit string, stats *Stats)) {
 	}
 }
 
-func (sa *StatsAll) Foreach(f func(col string, su *StatsUnit)) {
-	f(MGO_COL_STATS_TOTAL, sa.Total)
+func (sa *StatsAll) Foreach(f func(sess *mgo.Session, col string, su *StatsUnit)) {
+	f(sa.sess, MGO_COL_STATS_TOTAL, sa.Total)
 	for _, v := range sa.hour {
-		f(MGO_COL_STATS_HOUR, v)
+		f(sa.sess, MGO_COL_STATS_HOUR, v)
 	}
 	for _, v := range sa.day {
-		f(MGO_COL_STATS_DAY, v)
+		f(sa.sess, MGO_COL_STATS_DAY, v)
 	}
 	for _, v := range sa.week {
-		f(MGO_COL_STATS_WEEK, v)
+		f(sa.sess, MGO_COL_STATS_WEEK, v)
 	}
 	for _, v := range sa.month {
-		f(MGO_COL_STATS_MONTH, v)
+		f(sa.sess, MGO_COL_STATS_MONTH, v)
 	}
 }
 

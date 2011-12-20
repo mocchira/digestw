@@ -6,5 +6,7 @@ GOFILES=\
 	../common/twitter.go\
 	../common/model.go\
 	../common/string.go\
+	../common/http.go\
+	../common/mongo.go
 
 include $(GOROOT)/src/Make.cmd

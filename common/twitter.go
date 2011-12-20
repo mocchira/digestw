@@ -46,6 +46,7 @@ type TwUser struct {
 	Id                int64
 	Screen_Name       string
 	Profile_Image_Url *string
+	UTC_Offset        *int64
 }
 
 func (user TwUser) String() string {

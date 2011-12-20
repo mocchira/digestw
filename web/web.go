@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"io"
 	"log"
 	"fmt"
 	"flag"
@@ -13,6 +12,7 @@ import (
 	"http"
 	"url"
 	"time"
+//	"io/ioutil"
 	"github.com/hoisie/web.go"
 	"launchpad.net/mgo"
 	"github.com/mrjones/oauth"
@@ -172,39 +172,30 @@ func onLogin(ctx *web.Context) {
 	rt, url, err := consumer.GetRequestTokenAndUrl(CALLBACK_URL)
 	if err != nil {
 		onSystemError(ctx)
+		ctx.Logger.Println(err)
 		return
 	}
 	setTmpCookie(ctx, rt)
 	ctx.Redirect(http.StatusFound, url)
 }
 
-func registUser(sess *mgo.Session, r io.Reader, at *oauth.AccessToken) *DigestwUser {
-	var tu TwUser
-	dec := json.NewDecoder(r)
-	if err := dec.Decode(&tu); err != nil {
-		return nil
-	}
-	du := NewDigestwUser(&tu, at)
-	if _, err := du.Upsert(sess); err != nil {
-		return nil
-	}
-	return du
-}
-
 func onCallback(ctx *web.Context) {
 	rt := getTmpCookie(ctx)
 	if rt == nil {
 		onSystemError(ctx)
+		ctx.Logger.Println("missing request token")
 		return
 	}
 	oauth_verifier := ctx.Request.Params["oauth_verifier"]
 	if oauth_verifier == "" {
 		onSystemError(ctx)
+		ctx.Logger.Println("oauth verifier error")
 		return
 	}
 	at, err := consumer.AuthorizeToken(rt, oauth_verifier)
 	if err != nil {
 		onSystemError(ctx)
+		ctx.Logger.Println(err)
 		return
 	}
 	response, err := consumer.Get(
@@ -213,13 +204,21 @@ func onCallback(ctx *web.Context) {
 		at)
 	if err != nil {
 		onSystemError(ctx)
+		ctx.Logger.Println(err)
 		return
 	}
 	defer response.Body.Close()
 	sess := mgoPool.New()
 	defer sess.Close()
-	du := registUser(sess, response.Body, at)
-	ctx.Redirect(http.StatusFound, "http://digestw.stoic.co.jp/web/stats/"+du.TwUser.Screen_Name+"/total/")
+	if du, err := RegistUser(sess, response.Body, at); err != nil {
+		ctx.Logger.Println(err)
+		onSystemError(ctx)
+	} else {
+		done := make(chan int)
+		go Crawl(sess, consumer, du, nil, 200, false, done)
+		<-done
+		ctx.Redirect(http.StatusFound, "http://digestw.stoic.co.jp/web/stats/"+du.TwUser.Screen_Name+"/total/")
+	}
 }
 
 func onStatsDef(ctx *web.Context) {
