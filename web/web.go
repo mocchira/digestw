@@ -5,6 +5,7 @@ import (
 	"log"
 	"fmt"
 	"template"
+	"strconv"
 	"json"
 	"http"
 	"url"
@@ -37,6 +38,14 @@ var (
 		"day":   "20111219",
 		"hour":  "12",
 	}
+	unit2linkfun = map[string]func(string, string) []*UnitStyle{
+		"total": nil,
+		"month": genMonthLinks,
+		"week":  genWeekLinks,
+		"day":   genDayLinks,
+		"hour":  genHourLinks,
+	}
+	WEEK_LIST = [...]string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 )
 
 type UnitStyle struct {
@@ -46,6 +55,87 @@ type UnitStyle struct {
 type Beans struct {
 	Data  *StatsUnit
 	Units []*UnitStyle
+	Links []*UnitStyle
+}
+
+func genMonthLinks(uid, val string) []*UnitStyle {
+	ret := make([]*UnitStyle, 0)
+	for i := 1; i <= 12; i++ {
+		m := strconv.Itoa(i)
+		var ul *UnitStyle
+		if val == m {
+			ul = &UnitStyle{
+				Name:  m,
+				Class: STYLE_CLASS_SEL,
+			}
+		} else {
+			ul = &UnitStyle{
+				Name: GenAnchorTagStr(m, "/web/stats/"+uid+"/month/"+m),
+			}
+		}
+		ret = append(ret, ul)
+	}
+	return ret
+}
+func genWeekLinks(uid, val string) []*UnitStyle {
+	ret := make([]*UnitStyle, 0)
+	for i := 0; i < len(WEEK_LIST); i++ {
+		wi := strconv.Itoa(i)
+		var ul *UnitStyle
+		if val == wi {
+			ul = &UnitStyle{
+				Name:  WEEK_LIST[i],
+				Class: STYLE_CLASS_SEL,
+			}
+		} else {
+			ul = &UnitStyle{
+				Name: GenAnchorTagStr(WEEK_LIST[i], "/web/stats/"+uid+"/week/"+wi),
+			}
+		}
+		ret = append(ret, ul)
+	}
+	return ret
+}
+func genDayLinks(uid, val string) []*UnitStyle {
+	ret := make([]*UnitStyle, 0)
+	sec := time.Seconds()
+	for i := 0; i < 5; i++ {
+		sec -= 86400
+		t := time.SecondsToUTC(sec)
+		d := fmt.Sprintf("%4d%2d%2d", t.Year, t.Month, t.Day)
+		var ul *UnitStyle
+		if val == d {
+			ul = &UnitStyle{
+				Name:  d,
+				Class: STYLE_CLASS_SEL,
+			}
+		} else {
+			ul = &UnitStyle{
+				Name: GenAnchorTagStr(d, "/web/stats/"+uid+"/day/"+url.QueryEscape(d)),
+			}
+		}
+		ret = append(ret, ul)
+	}
+	return ret
+}
+func genHourLinks(uid, val string) []*UnitStyle {
+	ret := make([]*UnitStyle, 0)
+	for i := 0; i < 24; i++ {
+		h := strconv.Itoa(i)
+		var ul *UnitStyle
+		if val == h {
+			ul = &UnitStyle{
+				Name:  h,
+				Class: STYLE_CLASS_SEL,
+			}
+		} else {
+			ul = &UnitStyle{
+				Name: GenAnchorTagStr(h, "/web/stats/"+uid+"/hour/"+h),
+			}
+		}
+		ret = append(ret, ul)
+	}
+	return ret
 }
 
 func onInputError(ctx *web.Context) {
@@ -56,15 +146,15 @@ func onSystemError(ctx *web.Context) {
 	ctx.Abort(http.StatusInternalServerError, ERR_MSG)
 }
 
-func onStatsDef(ctx *web.Context) string {
-	return onStats(ctx, "mocchira", "total", "")
+func onStatsDef(ctx *web.Context) {
+	onStats(ctx, "mocchira", "total", "")
 }
 
-func onStats(ctx *web.Context, uid, unit, val string) string {
+func onStats(ctx *web.Context, uid, unit, val string) {
 	col, found := unit2col[unit]
 	if !found {
 		onInputError(ctx)
-		return ""
+		return
 	}
 	var nsu StatsUnit
 	var err os.Error
@@ -73,11 +163,11 @@ func onStats(ctx *web.Context, uid, unit, val string) string {
 	if err = nsu.Find(sess, col, uid, val); err != nil && err != mgo.NotFound {
 		ctx.Logger.Println(err, col, uid, val)
 		onSystemError(ctx)
-		return ""
+		return
 	}
 	if err == mgo.NotFound {
 		onInputError(ctx)
-		return ""
+		return
 	}
 	fsort := func(kind, unit string, stats *Stats) {
 		stats.GenOrderedKeys()
@@ -89,18 +179,23 @@ func onStats(ctx *web.Context, uid, unit, val string) string {
 		if bytes, err := json.Marshal(&nsu); err != nil {
 			ctx.Logger.Println(err, col, uid, val)
 			onSystemError(ctx)
+			return
 		} else {
-			return string(bytes)
+			ctx.Write(bytes)
+			return
 		}
 	}
 	bean := &Beans{
 		Data:  &nsu,
 		Units: make([]*UnitStyle, 0),
 	}
-	t := time.UTC()
+	t := time.SecondsToUTC(time.Seconds() - 86400)
 	unit2def["day"] = fmt.Sprintf("%4d%2d%2d", t.Year, t.Month, t.Day)
 	for k, _ := range unit2col {
 		if k == unit {
+			if flink := unit2linkfun[unit]; flink != nil {
+				bean.Links = flink(uid, val)
+			}
 			bean.Units = append(bean.Units, &UnitStyle{Name: k, Class: STYLE_CLASS_SEL})
 		} else {
 			anchor := `<a href="/web/stats/` +
@@ -113,9 +208,9 @@ func onStats(ctx *web.Context, uid, unit, val string) string {
 	if err := tplSet.Execute(ctx, "index.html", bean); err != nil {
 		ctx.Logger.Println(err, col, uid, val)
 		onSystemError(ctx)
-		return ""
+		return
 	}
-	return ""
+	return
 }
 
 func main() {
@@ -143,6 +238,7 @@ func main() {
 			"tpl/domain.html",
 			"tpl/sn.html",
 			"tpl/tab.html",
+			"tpl/link.html",
 		))
 
 	f, ferr := os.Create("server.log")

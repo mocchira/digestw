@@ -6,6 +6,17 @@
 <meta name="description" content="twitter,timeline,digest,">
 <meta name="robots" content="index,follow">
 <link rel="stylesheet" href="/s/a.css">
+<!--[if lt IE 9]>
+<style type="text/css">
+article,aside,canvas,details,figcaption,figure,
+footer,header,hgroup,menu,nav,section,summary
+{
+	display:block;
+}
+</style>
+<script src="/j/html5.js" type="text/javascript"></script>
+<![endif]-->
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
 <!--[if IE]>
 <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1" />
 <![endif]-->
@@ -30,15 +41,8 @@
 				{{template "tab.html" .Units}}
 				<div style="clear:both"></div>
 				
-				<ul>
-					<li><a href="/web/stats/mocchira/week/0">Sun</a></li>
-					<li><a href="/web/stats/mocchira/week/1">Mon</a></li>
-					<li><a href="/web/stats/mocchira/week/2">Tue</a></li>
-					<li><a href="/web/stats/mocchira/week/3">Wed</a></li>
-					<li><a href="/web/stats/mocchira/week/4">Thu</a></li>
-					<li><a href="/web/stats/mocchira/week/5">Fri</a></li>
-					<li><a href="/web/stats/mocchira/week/6">Sat</a></li>
-				</ul>
+				{{template "link.html" .Links}}
+				<div style="clear:both"></div>
 
 				{{if .Data.Tweets}}
 					<h3>Tweets</h3>
@@ -78,8 +82,8 @@
 			
 			<aside>
 				<h4>Search</h4>
-				<form action="#" class="s">
-					<input name="search" type="text" value="Type term and hit enter...">
+				<form action="#" id="searchbox" class="s">
+					<input id="searchtxt" name="search" type="text" value="Type term and hit enter...">
 				</form>
 				<h4>About the Author</h4>
 				<div id="c">
@@ -121,4 +125,17 @@
 			<p>Template Design &amp; Markup by <a href="http://jabz.net/contact/jonas-jacek">Jonas Jacek</a> | <a href="http://owmx.com/" title="Free HTML5 &amp; CSS3 Web Templates">Free Web Templates</a>.</p>
 		</footer>
 	</div>
+<script>
+$("#searchtxt").focus(function(ev){
+	ev.target.value = "";
+});
+$("#searchbox").submit(function(ev){
+	var sc = $("#searchtxt").val();
+	if (sc.length == 0) {
+		return false;
+	}
+	ev.target.action = "/web/stats/" + sc + "/total/";
+	return true;
+});
+</script>
 </html>

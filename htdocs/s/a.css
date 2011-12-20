@@ -303,8 +303,14 @@ article ul, aside ul {
 		margin : 0 0 20px 23px;
 	}
 	article ul li {
-		background : url(/i/ai2.png) no-repeat 0 8px;
-		padding : 0 0 0 17px;
+		float   : left;
+		padding : 5px 10px;
+	}
+	article ul li.selected {
+		-moz-border-radius: 4px;
+		-webkit-border-radius: 4px;
+		background : #DB0202;
+		color: #FFF;
 	}
 
 /* Sidebar */
