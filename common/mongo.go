@@ -12,13 +12,13 @@ import (
 	"launchpad.net/mgo"
 )
 
-func decode(r io.Reader) []TwStatus {
+func decode(r io.Reader) ([]TwStatus, os.Error) {
 	var tl []TwStatus
 	dec := json.NewDecoder(r)
 	if err := dec.Decode(&tl); err != nil {
-		return nil
+		return nil, err
 	}
-	return tl
+	return tl, nil
 }
 
 func addStats(sa *StatsAll, twstats *TwStatus, resolveURL bool) {
@@ -140,7 +140,11 @@ func Crawl(pool *mgo.Session, c *oauth.Consumer, du *DigestwUser, r io.Reader, c
 		defer response.Body.Close()
 		r = response.Body
 	}
-	tl := decode(r)
+	tl, err := decode(r)
+	if err != nil {
+		log.Print(err)
+		return
+	}
 	var sid, first, last int64
 	for k, v := range tl {
 		tmpTime, _ := time.Parse(time.RubyDate, v.Created_at)

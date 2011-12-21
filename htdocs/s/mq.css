@@ -1,0 +1,35 @@
+@media screen and (max-width: 650px) {
+ 
+    header {
+        height: auto;
+    }
+ 
+    article {
+        width: auto;
+        float: none;
+        margin: 20px 0;
+    }
+ 
+    #tab {
+        width: auto;
+    }
+
+    aside {
+        width: 100%;
+        float: none;
+        margin: 0;
+    }
+ 
+}
+
+@media screen and (max-width: 480px) {
+    html {
+        -webkit-text-size-adjust: none;
+    }
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    width: auto\9; /* ie8 */
+}

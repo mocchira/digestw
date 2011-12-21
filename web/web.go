@@ -12,7 +12,7 @@ import (
 	"http"
 	"url"
 	"time"
-//	"io/ioutil"
+	//	"io/ioutil"
 	"github.com/hoisie/web.go"
 	"launchpad.net/mgo"
 	"github.com/mrjones/oauth"
@@ -21,7 +21,8 @@ import (
 const (
 	HOME_URL        = "http://digestw.stoic.co.jp/web/stats/mocchira/total/"
 	CALLBACK_URL    = "http://digestw.stoic.co.jp/web/callback"
-	ERR_MSG         = "Server Error"
+	ERR_MSG_SYS     = "Server Error"
+	ERR_MSG_NOT_GEN = "Requested page still not generated. Wait a while please."
 	STYLE_CLASS_NON = "non"
 	STYLE_CLASS_SEL = "selected"
 )
@@ -62,6 +63,7 @@ type Beans struct {
 	Data  *StatsUnit
 	Units []*UnitStyle
 	Links []*UnitStyle
+	Error string
 }
 
 func genMonthLinks(uid, val string) []*UnitStyle {
@@ -144,12 +146,16 @@ func genHourLinks(uid, val string) []*UnitStyle {
 	return ret
 }
 
-func onInputError(ctx *web.Context) {
-	ctx.Redirect(http.StatusFound, HOME_URL)
+func genHomeURL(uid string) string {
+	return "http://digestw.stoic.co.jp/web/stats/" + uid + "/total/"
+}
+
+func onInputError(ctx *web.Context, uid string) {
+	ctx.Redirect(http.StatusFound, genHomeURL(uid)+"?err="+url.QueryEscape(ERR_MSG_NOT_GEN))
 }
 
 func onSystemError(ctx *web.Context) {
-	ctx.Abort(http.StatusInternalServerError, ERR_MSG)
+	ctx.Abort(http.StatusInternalServerError, ERR_MSG_SYS)
 }
 
 func setTmpCookie(ctx *web.Context, rt *oauth.RequestToken) {
@@ -217,7 +223,7 @@ func onCallback(ctx *web.Context) {
 		done := make(chan int)
 		go Crawl(sess, consumer, du, nil, 200, false, done)
 		<-done
-		ctx.Redirect(http.StatusFound, "http://digestw.stoic.co.jp/web/stats/"+du.TwUser.Screen_Name+"/total/")
+		ctx.Redirect(http.StatusFound, genHomeURL(du.TwUser.Screen_Name))
 	}
 }
 
@@ -228,7 +234,7 @@ func onStatsDef(ctx *web.Context) {
 func onStats(ctx *web.Context, uid, unit, val string) {
 	col, found := unit2col[unit]
 	if !found {
-		onInputError(ctx)
+		onInputError(ctx, "mocchira")
 		return
 	}
 	var nsu StatsUnit
@@ -241,7 +247,7 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 		return
 	}
 	if err == mgo.NotFound {
-		onInputError(ctx)
+		onInputError(ctx, uid)
 		return
 	}
 	fsort := func(kind, unit string, stats *Stats) {
@@ -264,8 +270,14 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 		Data:  &nsu,
 		Units: make([]*UnitStyle, 0),
 	}
-	t := time.SecondsToUTC(time.Seconds() - 86400)
+	if msg, found := ctx.Params["err"]; found {
+		bean.Error = msg
+	}
+	t := time.UTC()
+	unit2def["hour"] = strconv.Itoa(t.Hour)
 	unit2def["day"] = fmt.Sprintf("%4d%2d%2d", t.Year, t.Month, t.Day)
+	unit2def["week"] = strconv.Itoa(t.Weekday)
+	unit2def["month"] = strconv.Itoa(t.Month)
 	for k, _ := range unit2col {
 		if k == unit {
 			if flink := unit2linkfun[unit]; flink != nil {
