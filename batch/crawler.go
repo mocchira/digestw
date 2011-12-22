@@ -21,25 +21,21 @@ var (
 )
 
 func main() {
-	var consumerKey *string = flag.String("consumerkey", "RMA3YnQen7J0SDX67b5g", "")
-	var consumerSecret *string = flag.String("consumersecret", "87GYFCqZz2k9VLcatBp7cpajzcdxRRPKfa3pMPtgW4", "")
+	var consumerKey *string = flag.String("consumerkey", "xxx", "")
+	var consumerSecret *string = flag.String("consumersecret", "xxx", "")
 	var count *int = flag.Int("count", 100, "")
 	var mode *string = flag.String("mode", "default", "")
 
 	flag.Parse()
 
-	var err os.Error
-
 	// stop dual executing
 	dl := NewDirProcessLocker("lock")
-	if err = dl.Lock(); err != nil {
+	if err := dl.Lock(); err != nil {
 		if err == ProcessExist {
-			log.Printf(err.String())
 			return
 		}
 		log.Fatal(err)
 	}
-	//time.Sleep(60 * 1000 * 1000 * 1000)
 	defer dl.Unlock()
 
 	// init
@@ -51,10 +47,11 @@ func main() {
 			AuthorizeTokenUrl: "https://api.twitter.com/oauth/authorize",
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
 		})
-	c.Debug(true)
+	//c.Debug(true)
+	var err os.Error
 	mgPool, err = mgo.Mongo("localhost")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer mgPool.Close()
 
@@ -66,7 +63,6 @@ func main() {
 		done := make(chan int)
 		go Crawl(mgPool, c, &du, os.Stdin, *count, true, done)
 		<-done
-		return
 	case MODE_INIT_OAUTH:
 		requestToken, url, err := c.GetRequestTokenAndUrl("oob")
 		if err != nil {
@@ -94,7 +90,6 @@ func main() {
 		} else {
 			fmt.Println("id:" + du.TwUser.Screen_Name)
 		}
-		return
 	default:
 		var idx int
 		dulist := [CRAWL_UNIT]DigestwUser{}
@@ -105,11 +100,13 @@ func main() {
 			for iter.Next(&dulist[idx]) {
 				go Crawl(mgPool, c, &dulist[idx], nil, *count, true, done)
 				idx++
+				log.Printf("[go]idx:%d sn:%s", idx, dulist[idx].TwUser.Screen_Name)
 			}
 			for ; idx > 0; idx-- {
 				<-done
+				log.Printf("[go]idx:%d done", idx)
 			}
-			if iter.Err() != nil {
+			if err := iter.Err(); err != nil {
 				log.Fatal(err)
 			}
 			if idx < CRAWL_UNIT {

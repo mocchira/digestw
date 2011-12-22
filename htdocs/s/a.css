@@ -64,6 +64,7 @@ SUP {
 
 /* tab */
 #tab {
+	width : 490px;
 	position : relative;
 	border-top: 5px solid #DB0202;
 	color : #FFF;
@@ -129,10 +130,6 @@ article {
 	}
 	article p {
 		margin : 0 0 20px 0;
-	}
-	article img {
-		float : left;
-		margin : 6px 10px 0 0;
 	}
 
 /* Highlighted Paragraphs */
@@ -300,7 +297,7 @@ article ul, aside ul {
 	margin : 0 0 20px 0;
 	}
 	article ul {
-		margin : 0 0 20px 23px;
+		margin : 10px 0 20px 23px;
 	}
 	article ul li {
 		float   : left;

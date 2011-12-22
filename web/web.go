@@ -60,6 +60,7 @@ type UnitStyle struct {
 	Name  string
 }
 type Beans struct {
+	User  *DigestwUser
 	Data  *StatsUnit
 	Units []*UnitStyle
 	Links []*UnitStyle
@@ -238,9 +239,19 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 		return
 	}
 	var nsu StatsUnit
+	var du DigestwUser
 	var err os.Error
 	sess := mgoPool.New()
 	defer sess.Close()
+	if err = du.FindOne(sess, uid); err != nil && err != mgo.NotFound {
+		ctx.Logger.Println(err, col, uid, val)
+		onSystemError(ctx)
+		return
+	}
+	if err == mgo.NotFound {
+		onInputError(ctx, "mocchira")
+		return
+	}
 	if err = nsu.Find(sess, col, uid, val); err != nil && err != mgo.NotFound {
 		ctx.Logger.Println(err, col, uid, val)
 		onSystemError(ctx)
@@ -252,8 +263,8 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 	}
 	fsort := func(kind, unit string, stats *Stats) {
 		stats.GenOrderedKeys()
-		keys := stats.Keys()
-		ctx.Logger.Println(kind, unit, keys)
+		stats.Keys()
+		//ctx.Logger.Println(kind, unit, keys)
 	}
 	nsu.ForeachStats(fsort)
 	if fmt, found := ctx.Params["fmt"]; found && fmt == "json" {
@@ -267,6 +278,7 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 		}
 	}
 	bean := &Beans{
+		User:  &du,
 		Data:  &nsu,
 		Units: make([]*UnitStyle, 0),
 	}

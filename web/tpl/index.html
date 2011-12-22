@@ -33,13 +33,11 @@ footer,header,hgroup,menu,nav,section,summary
 		<div id="b">
 		     <article>
 				{{if .Error}}
-					<p class="highlight-1"><strong>Error:</strong>{{.Error|html}}</p>
+					<p class="highlight-1"><strong>Error:&nbsp;</strong>{{.Error|html}}</p>
 				{{end}}
 			     <h1>{{.Data.UserId}}</h1>
-<!--
-				<p class="highlight-2"><strong>Notice:</strong> This is how a notice looks like.</p>
-				<p class="highlight-3"><strong>Confirmation:</strong> This is how a confirmation looks like.</p>
--->
+				<img src="{{.User.TwUser.Profile_Image_Url}}" alt="{{.Data.UserId}}" />
+				<h3>Share</h3>
 				<ul>
 					<li>
 <a href="https://twitter.com/share" class="twitter-share-button" data-count="none" data-lang="en">Tweet</a>
