@@ -99,8 +99,8 @@ func main() {
 			iter := dulist[0].Find(mgPool, time.Seconds())
 			for iter.Next(&dulist[idx]) {
 				go Crawl(mgPool, c, &dulist[idx], nil, *count, true, done)
-				idx++
 				log.Printf("[go]idx:%d sn:%s", idx, dulist[idx].TwUser.Screen_Name)
+				idx++
 			}
 			for ; idx > 0; idx-- {
 				<-done
