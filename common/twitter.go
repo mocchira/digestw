@@ -2,7 +2,16 @@ package main
 
 import (
 	"fmt"
-	"url"
+	"strconv"
+	"json"
+	"io"
+	"os"
+	"github.com/mrjones/oauth"
+)
+
+const (
+	TW_URL_VERIFY_CREDENTIAL = "https://api.twitter.com/1/account/verify_credentials.json"
+	TW_URL_HOME_TIMELINE     = "https://api.twitter.com/1/statuses/home_timeline.json"
 )
 
 type TwStatus struct {
@@ -12,6 +21,32 @@ type TwStatus struct {
 	Place      *TwPlace
 	Id         int64
 	Text       string
+}
+
+type TwTimeLine []TwStatus
+
+func (tl *TwTimeLine) Get(r io.Reader) os.Error {
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(tl); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (tl *TwTimeLine) GetFromAPI(c *oauth.Consumer, at *oauth.AccessToken, count int, sinceId string) os.Error {
+	params := map[string]string{"include_entities": "true", "count": strconv.Itoa(count)}
+	if sinceId != "" && sinceId != "0" {
+		params["since_id"] = sinceId
+	}
+	response, err := c.Get(
+		TW_URL_HOME_TIMELINE,
+		params,
+		at)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	return tl.Get(response.Body)
 }
 
 type TwEntities struct {
@@ -49,7 +84,27 @@ type TwUser struct {
 	UTC_Offset        *int64
 }
 
-func (user TwUser) String() string {
+func (user *TwUser) Get(r io.Reader) os.Error {
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(user); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (user *TwUser) GetFromAPI(c *oauth.Consumer, at *oauth.AccessToken) os.Error {
+	response, err := c.Get(
+		TW_URL_VERIFY_CREDENTIAL,
+		map[string]string{"skip_status": "true"},
+		at)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	return user.Get(response.Body)
+}
+
+func (user *TwUser) String() string {
 	return fmt.Sprintf("{id:%d, sn:%s, piu:%s}", user.Id, user.Screen_Name, *(user.Profile_Image_Url))
 }
 
@@ -59,16 +114,4 @@ type TwPlace struct {
 	Url          string
 	Id           string
 	Place_Type   string
-}
-
-func GetTwitterAccountURL(sn string) string {
-	return "http://twitter.com/" + sn
-}
-
-func GetSearchResultURL(src string) string {
-	return "https://twitter.com/#!/search/" + url.QueryEscape(src)
-}
-
-func GetDomainURL(domain string) string {
-	return "http://" + domain
 }

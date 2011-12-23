@@ -2,6 +2,7 @@ package main
 
 import (
 	"utf8"
+	"url"
 )
 
 func CutString(src, suffix string, length int) string {
@@ -19,3 +20,16 @@ func CutString(src, suffix string, length int) string {
 func GenAnchorTagStr(disp, url string) string {
 	return `<a href="` + url + `">` + disp + `</a>`
 }
+
+func GetTwitterAccountURL(sn string) string {
+        return "http://twitter.com/" + sn
+}
+
+func GetSearchResultURL(src string) string {
+        return "https://twitter.com/#!/search/" + url.QueryEscape(src)
+}
+
+func GetDomainURL(domain string) string {
+        return "http://" + domain
+}
+

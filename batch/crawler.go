@@ -16,13 +16,10 @@ const (
 	MODE_DEFAULT    = "default"
 )
 
-var (
-	mgPool *mgo.Session
-)
-
 func main() {
 	var consumerKey *string = flag.String("consumerkey", "xxx", "")
 	var consumerSecret *string = flag.String("consumersecret", "xxx", "")
+	var mongoUrl *string = flag.String("mongourl", "xxx", "")
 	var count *int = flag.Int("count", 100, "")
 	var mode *string = flag.String("mode", "default", "")
 
@@ -48,8 +45,7 @@ func main() {
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
 		})
 	//c.Debug(true)
-	var err os.Error
-	mgPool, err = mgo.Mongo("localhost")
+	mgPool, err := mgo.Mongo(*mongoUrl)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,11 +53,14 @@ func main() {
 
 	switch *mode {
 	case MODE_TEST:
-		// js test
+		var tl TwTimeLine
+		if err := tl.Get(os.Stdin); err != nil {
+			log.Fatal(err)
+		}
 		var du DigestwUser
 		du.TwUser.Screen_Name = "mocchira"
 		done := make(chan int)
-		go Crawl(mgPool, c, &du, os.Stdin, *count, true, done)
+		go Crawl(mgPool, &du, &tl, true, done)
 		<-done
 	case MODE_INIT_OAUTH:
 		requestToken, url, err := c.GetRequestTokenAndUrl("oob")
@@ -77,15 +76,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		response, err := c.Get(
-			"https://api.twitter.com/1/account/verify_credentials.json",
-			map[string]string{"skip_status": "true"},
-			accessToken)
-		if err != nil {
+		var tu TwUser
+		if err := tu.GetFromAPI(c, accessToken); err != nil {
 			log.Fatal(err)
 		}
-		defer response.Body.Close()
-		if du, err := RegistUser(mgPool, response.Body, accessToken); err != nil {
+		if du, err := RegistUser(mgPool, &tu, accessToken); err != nil {
 			log.Fatal(err)
 		} else {
 			fmt.Println("id:" + du.TwUser.Screen_Name)
@@ -98,13 +93,17 @@ func main() {
 			idx = 0
 			iter := dulist[0].Find(mgPool, time.Seconds())
 			for iter.Next(&dulist[idx]) {
-				go Crawl(mgPool, c, &dulist[idx], nil, *count, true, done)
+				var tl TwTimeLine
+				if err := tl.GetFromAPI(c, &dulist[idx].AccessToken, *count, dulist[idx].SinceId); err != nil {
+					log.Println(err)
+				}
+				go Crawl(mgPool, &dulist[idx], &tl, true, done)
 				log.Printf("[go]idx:%d sn:%s", idx, dulist[idx].TwUser.Screen_Name)
 				idx++
 			}
 			for ; idx > 0; idx-- {
 				<-done
-				log.Printf("[go]idx:%d done", idx)
+				log.Printf("[go]idx:%d done", idx-1)
 			}
 			if err := iter.Err(); err != nil {
 				log.Fatal(err)

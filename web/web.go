@@ -12,17 +12,17 @@ import (
 	"http"
 	"url"
 	"time"
-	//	"io/ioutil"
 	"github.com/hoisie/web.go"
 	"launchpad.net/mgo"
 	"github.com/mrjones/oauth"
 )
 
 const (
-	HOME_URL        = "http://digestw.stoic.co.jp/web/stats/mocchira/total/"
-	CALLBACK_URL    = "http://digestw.stoic.co.jp/web/callback"
+	URL_CALLBACK    = "http://digestw.stoic.co.jp/web/callback"
 	ERR_MSG_SYS     = "Server Error"
 	ERR_MSG_NOT_GEN = "Requested page still not generated. Wait a while please."
+	ERR_MSG_OAUTH   = "OAuth failed."
+	ERR_MSG_COOKIE  = "Getting Temporary Cookie failed. Try again or confirm your browser's cookie setting on."
 	STYLE_CLASS_NON = "non"
 	STYLE_CLASS_SEL = "selected"
 )
@@ -109,7 +109,6 @@ func genDayLinks(uid, val string) []*UnitStyle {
 	ret := make([]*UnitStyle, 0)
 	sec := time.Seconds()
 	for i := 0; i < 5; i++ {
-		sec -= 86400
 		t := time.SecondsToUTC(sec)
 		d := fmt.Sprintf("%4d%2d%2d", t.Year, t.Month, t.Day)
 		var ul *UnitStyle
@@ -124,6 +123,7 @@ func genDayLinks(uid, val string) []*UnitStyle {
 			}
 		}
 		ret = append(ret, ul)
+		sec -= 86400
 	}
 	return ret
 }
@@ -151,8 +151,8 @@ func genHomeURL(uid string) string {
 	return "http://digestw.stoic.co.jp/web/stats/" + uid + "/total/"
 }
 
-func onInputError(ctx *web.Context, uid string) {
-	ctx.Redirect(http.StatusFound, genHomeURL(uid)+"?err="+url.QueryEscape(ERR_MSG_NOT_GEN))
+func onInputError(ctx *web.Context, uid, errmsg string) {
+	ctx.Redirect(http.StatusFound, genHomeURL(uid)+"?err="+url.QueryEscape(errmsg))
 }
 
 func onSystemError(ctx *web.Context) {
@@ -176,7 +176,7 @@ func getTmpCookie(ctx *web.Context) *oauth.RequestToken {
 }
 
 func onLogin(ctx *web.Context) {
-	rt, url, err := consumer.GetRequestTokenAndUrl(CALLBACK_URL)
+	rt, url, err := consumer.GetRequestTokenAndUrl(URL_CALLBACK)
 	if err != nil {
 		onSystemError(ctx)
 		ctx.Logger.Println(err)
@@ -189,40 +189,42 @@ func onLogin(ctx *web.Context) {
 func onCallback(ctx *web.Context) {
 	rt := getTmpCookie(ctx)
 	if rt == nil {
-		onSystemError(ctx)
+		onInputError(ctx, "mocchira", ERR_MSG_COOKIE)
 		ctx.Logger.Println("missing request token")
 		return
 	}
 	oauth_verifier := ctx.Request.Params["oauth_verifier"]
 	if oauth_verifier == "" {
-		onSystemError(ctx)
+		onInputError(ctx, "mocchira", ERR_MSG_OAUTH)
 		ctx.Logger.Println("oauth verifier error")
 		return
 	}
 	at, err := consumer.AuthorizeToken(rt, oauth_verifier)
 	if err != nil {
-		onSystemError(ctx)
+		onInputError(ctx, "mocchira", ERR_MSG_OAUTH)
 		ctx.Logger.Println(err)
 		return
 	}
-	response, err := consumer.Get(
-		"https://api.twitter.com/1/account/verify_credentials.json",
-		map[string]string{"skip_status": "true"},
-		at)
-	if err != nil {
-		onSystemError(ctx)
+	var tu TwUser
+	if err := tu.GetFromAPI(consumer, at); err != nil {
+		onInputError(ctx, "mocchira", ERR_MSG_OAUTH)
 		ctx.Logger.Println(err)
 		return
 	}
-	defer response.Body.Close()
 	sess := mgoPool.New()
 	defer sess.Close()
-	if du, err := RegistUser(sess, response.Body, at); err != nil {
+	if du, err := RegistUser(sess, &tu, at); err != nil {
 		ctx.Logger.Println(err)
 		onSystemError(ctx)
 	} else {
+		var tl TwTimeLine
+		if err := tl.GetFromAPI(consumer, at, 200, du.SinceId); err != nil {
+			onInputError(ctx, "mocchira", ERR_MSG_OAUTH)
+			ctx.Logger.Println(err)
+			return
+		}
 		done := make(chan int)
-		go Crawl(sess, consumer, du, nil, 200, false, done)
+		go Crawl(sess, du, &tl, false, done)
 		<-done
 		ctx.Redirect(http.StatusFound, genHomeURL(du.TwUser.Screen_Name))
 	}
@@ -235,7 +237,7 @@ func onStatsDef(ctx *web.Context) {
 func onStats(ctx *web.Context, uid, unit, val string) {
 	col, found := unit2col[unit]
 	if !found {
-		onInputError(ctx, "mocchira")
+		onInputError(ctx, "mocchira", ERR_MSG_NOT_GEN)
 		return
 	}
 	var nsu StatsUnit
@@ -249,7 +251,7 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 		return
 	}
 	if err == mgo.NotFound {
-		onInputError(ctx, "mocchira")
+		onInputError(ctx, "mocchira", ERR_MSG_NOT_GEN)
 		return
 	}
 	if err = nsu.Find(sess, col, uid, val); err != nil && err != mgo.NotFound {
@@ -258,13 +260,12 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 		return
 	}
 	if err == mgo.NotFound {
-		onInputError(ctx, uid)
+		onInputError(ctx, uid, ERR_MSG_NOT_GEN)
 		return
 	}
 	fsort := func(kind, unit string, stats *Stats) {
 		stats.GenOrderedKeys()
 		stats.Keys()
-		//ctx.Logger.Println(kind, unit, keys)
 	}
 	nsu.ForeachStats(fsort)
 	if fmt, found := ctx.Params["fmt"]; found && fmt == "json" {
@@ -297,10 +298,8 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 			}
 			bean.Units = append(bean.Units, &UnitStyle{Name: k, Class: STYLE_CLASS_SEL})
 		} else {
-			anchor := `<a href="/web/stats/` +
-				uid + "/" +
-				k + "/" +
-				url.QueryEscape(unit2def[k]) + `">` + k + `</a>`
+			href := "/web/stats/" + uid + "/" + k + "/" + url.QueryEscape(unit2def[k])
+			anchor := GenAnchorTagStr(k, href)
 			bean.Units = append(bean.Units, &UnitStyle{Name: anchor, Class: STYLE_CLASS_NON})
 		}
 	}
@@ -313,12 +312,13 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 }
 
 func main() {
-	var consumerKey *string = flag.String("consumerkey", "RMA3YnQen7J0SDX67b5g", "")
-	var consumerSecret *string = flag.String("consumersecret", "87GYFCqZz2k9VLcatBp7cpajzcdxRRPKfa3pMPtgW4", "")
+	var consumerKey *string = flag.String("consumerkey", "xxx", "")
+	var consumerSecret *string = flag.String("consumersecret", "xxx", "")
+	var cookieSecret *string = flag.String("cookiesecret", "xxx", "")
+	var mongoUrl *string = flag.String("mongourl", "xxx", "")
 
 	flag.Parse()
 
-	// init
 	consumer = oauth.NewConsumer(
 		*consumerKey,
 		*consumerSecret,
@@ -328,7 +328,7 @@ func main() {
 			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
 		})
 	var err os.Error
-	mgoPool, err = mgo.Mongo("localhost")
+	mgoPool, err = mgo.Mongo(*mongoUrl)
 	if err != nil {
 		panic(err)
 	}
@@ -361,7 +361,7 @@ func main() {
 	logger := log.New(f, "", log.Ldate|log.Ltime)
 	web.SetLogger(logger)
 	web.Config.StaticDir = "../htdocs"
-	web.Config.CookieSecret = "rep;oijgerke"
+	web.Config.CookieSecret = *cookieSecret
 
 	web.Get("/web/login", onLogin)
 	web.Get("/web/callback", onCallback)

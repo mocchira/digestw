@@ -3,23 +3,12 @@ package main
 import (
 	"os"
 	"url"
-	"io"
 	"log"
 	"strconv"
-	"json"
 	"time"
 	"github.com/mrjones/oauth"
 	"launchpad.net/mgo"
 )
-
-func decode(r io.Reader) ([]TwStatus, os.Error) {
-	var tl []TwStatus
-	dec := json.NewDecoder(r)
-	if err := dec.Decode(&tl); err != nil {
-		return nil, err
-	}
-	return tl, nil
-}
 
 func addStats(sa *StatsAll, twstats *TwStatus, resolveURL bool) {
 	sa.SetStatsTime(twstats.Created_at)
@@ -106,47 +95,21 @@ func update(sess *mgo.Session, col string, su *StatsUnit) {
 	}
 }
 
-func RegistUser(sess *mgo.Session, r io.Reader, at *oauth.AccessToken) (*DigestwUser, os.Error) {
-	var tu TwUser
-	dec := json.NewDecoder(r)
-	if err := dec.Decode(&tu); err != nil {
-		return nil, err
-	}
-	du := NewDigestwUser(&tu, at)
+func RegistUser(sess *mgo.Session, tu *TwUser, at *oauth.AccessToken) (*DigestwUser, os.Error) {
+	du := NewDigestwUser(tu, at)
 	if _, err := du.Upsert(sess); err != nil {
 		return nil, err
 	}
 	return du, nil
 }
 
-func Crawl(pool *mgo.Session, c *oauth.Consumer, du *DigestwUser, r io.Reader, count int, resolveURL bool, done chan<- int) {
+func Crawl(pool *mgo.Session, du *DigestwUser, tl *TwTimeLine, resolveURL bool, done chan<- int) {
 	defer func() { done <- 0 }()
 	sess := pool.New()
 	defer sess.Close()
 	sa := NewStatsAll(du.TwUser.Screen_Name, sess)
-	if r == nil {
-		params := map[string]string{"include_entities": "true", "count": strconv.Itoa(count)}
-		if du.SinceId != "" && du.SinceId != "0" {
-			params["since_id"] = du.SinceId
-		}
-		response, err := c.Get(
-			"https://api.twitter.com/1/statuses/home_timeline.json",
-			params,
-			&(du.AccessToken))
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		defer response.Body.Close()
-		r = response.Body
-	}
-	tl, err := decode(r)
-	if err != nil {
-		log.Print(err)
-		return
-	}
 	var sid, first, last int64
-	for k, v := range tl {
+	for k, v := range *tl {
 		tmpTime, _ := time.Parse(time.RubyDate, v.Created_at)
 		tmpSec := tmpTime.Seconds()
 		if du.UTC_Offset != nil {
@@ -158,7 +121,7 @@ func Crawl(pool *mgo.Session, c *oauth.Consumer, du *DigestwUser, r io.Reader, c
 			last = tmpSec
 		}
 		addStats(sa, &v, resolveURL)
-		if k == (len(tl) - 1) {
+		if k == (len(*tl) - 1) {
 			first = tmpSec
 		}
 		log.Printf("id:%d", v.Id)
