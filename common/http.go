@@ -8,11 +8,17 @@ import (
 )
 
 const (
-	HTTP_TIMEOUT = 1e9 * 10 // 10sec
+	HTTP_TIMEOUT = 1e9 * 5 // 5sec
 )
 
 var (
-	DigestHttpClient = &http.Client{Transport: &http.Transport{Dial: timeoutDialler(HTTP_TIMEOUT)}}
+	// DigestHttpClient is used by GetFinalURL
+	DigestHttpClient = &http.Client{
+		Transport: &http.Transport{
+			Dial:                timeoutDialler(HTTP_TIMEOUT),
+			MaxIdleConnsPerHost: CRAWL_UNIT, // because each of crawling goroutines will access to specific url shorter providers
+		},
+	}
 )
 
 func timeoutDialler(ns int64) func(net, addr string) (c net.Conn, err os.Error) {
@@ -26,7 +32,7 @@ func timeoutDialler(ns int64) func(net, addr string) (c net.Conn, err os.Error) 
 	}
 }
 
-// GetFinalURL resolves a URL to a URL which represents a final location url
+// GetFinalURL resolves a URL to a URL which represents a final location
 func GetFinalURL(url string) (*url.URL, os.Error) {
 	res, err := DigestHttpClient.Head(url)
 	if err != nil {

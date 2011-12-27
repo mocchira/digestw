@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	MODE_TEST       = "test"
-	MODE_INIT_OAUTH = "oauth"
-	MODE_DEFAULT    = "default"
+	MODE_TEST      = "test"
+	MODE_OAUTH_OOB = "oauth"
+	MODE_DEFAULT   = "default"
 )
 
 func main() {
@@ -62,7 +62,7 @@ func main() {
 		done := make(chan int)
 		go Crawl(mgPool, &du, &tl, true, done)
 		<-done
-	case MODE_INIT_OAUTH:
+	case MODE_OAUTH_OOB:
 		requestToken, url, err := c.GetRequestTokenAndUrl("oob")
 		if err != nil {
 			log.Fatal(err)
@@ -96,6 +96,7 @@ func main() {
 				var tl TwTimeLine
 				if err := tl.GetFromAPI(c, &dulist[idx].AccessToken, *count, dulist[idx].SinceId); err != nil {
 					log.Println(err)
+					continue
 				}
 				go Crawl(mgPool, &dulist[idx], &tl, true, done)
 				log.Printf("[go]idx:%d sn:%s", idx, dulist[idx].TwUser.Screen_Name)
