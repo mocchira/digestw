@@ -118,8 +118,9 @@ func genDayLinks(uid, val string) []*UnitStyle {
 				Class: STYLE_CLASS_SEL,
 			}
 		} else {
+			urlPath := &url.URL{Path: d}
 			ul = &UnitStyle{
-				Name: GenAnchorTagStr(d, "/web/stats/"+uid+"/day/"+url.QueryEscape(d)),
+				Name: GenAnchorTagStr(d, "/web/stats/"+uid+"/day/"+urlPath.EncodedPath()),
 			}
 		}
 		ret = append(ret, ul)
@@ -298,7 +299,8 @@ func onStats(ctx *web.Context, uid, unit, val string) {
 			}
 			bean.Units = append(bean.Units, &UnitStyle{Name: k, Class: STYLE_CLASS_SEL})
 		} else {
-			href := "/web/stats/" + uid + "/" + k + "/" + url.QueryEscape(unit2def[k])
+			urlPath := &url.URL{Path: unit2def[k]}
+			href := "/web/stats/" + uid + "/" + k + "/" + urlPath.EncodedPath()
 			anchor := GenAnchorTagStr(k, href)
 			bean.Units = append(bean.Units, &UnitStyle{Name: anchor, Class: STYLE_CLASS_NON})
 		}

@@ -124,7 +124,7 @@ func Crawl(pool *mgo.Session, du *DigestwUser, tl *TwTimeLine, resolveURL bool, 
 		if k == (len(*tl) - 1) {
 			first = tmpSec
 		}
-		log.Printf("id:%d", v.Id)
+		//log.Printf("id:%d", v.Id)
 	}
 	sa.Foreach(update)
 	// decide to the next execution time
