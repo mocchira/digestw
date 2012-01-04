@@ -32,22 +32,22 @@ Dependencies of goinstallable packages
 
 Install
 -------
-
-  cd batch && make
-  cd web && make
+    
+    cd batch && make
+    cd web && make
 
 Run
 ---
 
 ### batch
 need to execute at fixed intervals. (ex. 5min by cron)
-
-  ./digestw_crawler -consumerkey "yourconsumerkey" -consumersecret "yourconsumersecret" >> digestw.log 2>&1
+    
+    ./digestw_crawler -consumerkey "yourconsumerkey" -consumersecret "yourconsumersecret" >> digestw.log 2>&1
 
 ### web
 run on 8080 port
-
-  ./digestw_web -consumerkey "yourconsumerkey" -consumersecret "yourconsumersecret" -cookiesecret "yourcookiese" -mongourl "yourhost" &
+    
+    ./digestw_web -consumerkey "yourconsumerkey" -consumersecret "yourconsumersecret" -cookiesecret "yourcookiese" -mongourl "yourhost" &
 
 Site
 ----
