@@ -1,14 +1,12 @@
 package main
 
 import (
-	"os"
-	"sort"
-	"time"
 	"fmt"
-	"strconv"
 	"launchpad.net/gobson/bson"
 	"launchpad.net/mgo"
-	"github.com/mrjones/oauth"
+	"sort"
+	"strconv"
+	"time"
 )
 
 const (
@@ -57,7 +55,8 @@ func (s *Stats) Keys() []string {
 	if len(s.orderedKeys) > REC_MAX_COUNT {
 		delKeys := s.orderedKeys[REC_MAX_COUNT:]
 		for _, key := range delKeys {
-			s.Samples[key] = 0, false
+			//s.Samples[key] = 0, false
+			delete(s.Samples, key)
 		}
 		s.orderedKeys = s.orderedKeys[:REC_MAX_COUNT]
 	}
@@ -208,12 +207,12 @@ func (su *StatsUnit) GetTweetersStats() *Stats {
 	return su.Tweeters
 }
 
-func (su *StatsUnit) Upsert(sess *mgo.Session, col, uid, unitid string) (interface{}, os.Error) {
+func (su *StatsUnit) Upsert(sess *mgo.Session, col, uid, unitid string) (interface{}, error) {
 	c := sess.DB(MGO_DB).C(col)
 	return c.Upsert(bson.M{"userid": uid, "unitid": unitid}, su)
 }
 
-func (su *StatsUnit) Find(sess *mgo.Session, col, uid, unitid string) os.Error {
+func (su *StatsUnit) Find(sess *mgo.Session, col, uid, unitid string) error {
 	c := sess.DB(MGO_DB).C(col)
 	if unitid == "" {
 		return c.Find(bson.M{"userid": uid}).One(su)
@@ -227,7 +226,7 @@ type StatsAll struct {
 	day       []*StatsUnit
 	week      []*StatsUnit
 	month     []*StatsUnit
-	statsTime *time.Time
+	statsTime time.Time
 	UserId    string
 	sess      *mgo.Session
 }
@@ -239,7 +238,7 @@ func NewStatsAll(uid string, sess *mgo.Session) *StatsAll {
 		day:       make([]*StatsUnit, 0),
 		week:      make([]*StatsUnit, 0),
 		month:     make([]*StatsUnit, 0),
-		statsTime: time.UTC(),
+		statsTime: time.Now(),
 		UserId:    uid,
 		sess:      sess,
 	}
@@ -304,7 +303,7 @@ func (sa *StatsAll) SetStatsTime(dt string) {
 }
 
 func (sa *StatsAll) GetHourStatsUnit() *StatsUnit {
-	key := strconv.Itoa(sa.statsTime.Hour)
+	key := strconv.Itoa(sa.statsTime.Hour())
 	for _, v := range sa.hour {
 		if v.UnitId == key {
 			return v
@@ -316,7 +315,7 @@ func (sa *StatsAll) GetHourStatsUnit() *StatsUnit {
 }
 
 func (sa *StatsAll) GetDayStatsUnit() *StatsUnit {
-	key := fmt.Sprintf("%4d%2d%2d", sa.statsTime.Year, sa.statsTime.Month, sa.statsTime.Day)
+	key := fmt.Sprintf("%4d%2d%2d", sa.statsTime.Year(), sa.statsTime.Month(), sa.statsTime.Day())
 	for _, v := range sa.day {
 		if v.UnitId == key {
 			return v
@@ -328,7 +327,7 @@ func (sa *StatsAll) GetDayStatsUnit() *StatsUnit {
 }
 
 func (sa *StatsAll) GetWeekStatsUnit() *StatsUnit {
-	key := strconv.Itoa(sa.statsTime.Weekday)
+	key := strconv.Itoa(int(sa.statsTime.Weekday()))
 	for _, v := range sa.week {
 		if v.UnitId == key {
 			return v
@@ -340,7 +339,7 @@ func (sa *StatsAll) GetWeekStatsUnit() *StatsUnit {
 }
 
 func (sa *StatsAll) GetMonthStatsUnit() *StatsUnit {
-	key := strconv.Itoa(sa.statsTime.Month)
+	key := strconv.Itoa(int(sa.statsTime.Month()))
 	for _, v := range sa.month {
 		if v.UnitId == key {
 			return v
@@ -352,25 +351,27 @@ func (sa *StatsAll) GetMonthStatsUnit() *StatsUnit {
 }
 
 type DigestwUser struct {
-	TwUser            ",inline"
-	oauth.AccessToken ",inline"
-	SinceId           string
-	NextSeconds       int64
+	TwUser      ",inline"
+	Token       string
+	Secret      string
+	SinceId     string
+	NextSeconds int64
 }
 
-func NewDigestwUser(tu *TwUser, at *oauth.AccessToken) *DigestwUser {
+func NewDigestwUser(tu *TwUser, token, secret string) *DigestwUser {
 	return &DigestwUser{
-		TwUser:      *tu,
-		AccessToken: *at,
+		TwUser: *tu,
+		Token:  token,
+		Secret: secret,
 	}
 }
 
-func (su *DigestwUser) Upsert(sess *mgo.Session) (interface{}, os.Error) {
+func (su *DigestwUser) Upsert(sess *mgo.Session) (interface{}, error) {
 	c := sess.DB(MGO_DB).C(MGO_COL_USER)
 	return c.Upsert(bson.M{"screen_name": su.TwUser.Screen_Name}, su)
 }
 
-func (su *DigestwUser) FindOne(sess *mgo.Session, sn string) os.Error {
+func (su *DigestwUser) FindOne(sess *mgo.Session, sn string) error {
 	c := sess.DB(MGO_DB).C(MGO_COL_USER)
 	return c.Find(bson.M{"screen_name": sn}).One(su)
 }

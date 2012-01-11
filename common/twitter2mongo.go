@@ -1,13 +1,11 @@
 package main
 
 import (
-	"os"
-	"url"
+	"launchpad.net/mgo"
 	"log"
+	"net/url"
 	"strconv"
 	"time"
-	"github.com/mrjones/oauth"
-	"launchpad.net/mgo"
 )
 
 func addStats(sa *StatsAll, twstats *TwStatus, resolveURL bool) {
@@ -39,7 +37,7 @@ func addStats(sa *StatsAll, twstats *TwStatus, resolveURL bool) {
 		if resolveURL {
 			for _, v := range twstats.Entities.Urls {
 				var orgUrl *url.URL
-				var err os.Error
+				var err error
 				if v.Expanded_Url == nil {
 					if orgUrl, err = GetFinalURL(v.Url); err != nil {
 						continue
@@ -80,7 +78,7 @@ func addStats(sa *StatsAll, twstats *TwStatus, resolveURL bool) {
 
 func update(sess *mgo.Session, col string, su *StatsUnit) {
 	var nsu StatsUnit
-	var err os.Error
+	var err error
 	if err = nsu.Find(sess, col, su.UserId, su.UnitId); err != nil && err != mgo.NotFound {
 		log.Print(err)
 		return
@@ -95,8 +93,8 @@ func update(sess *mgo.Session, col string, su *StatsUnit) {
 	}
 }
 
-func RegistUser(sess *mgo.Session, tu *TwUser, at *oauth.AccessToken) (*DigestwUser, os.Error) {
-	du := NewDigestwUser(tu, at)
+func RegistUser(sess *mgo.Session, tu *TwUser, token, secret string) (*DigestwUser, error) {
+	du := NewDigestwUser(tu, token, secret)
 	if _, err := du.Upsert(sess); err != nil {
 		return nil, err
 	}
@@ -108,28 +106,27 @@ func Crawl(pool *mgo.Session, du *DigestwUser, tl *TwTimeLine, resolveURL bool, 
 	sess := pool.New()
 	defer sess.Close()
 	sa := NewStatsAll(du.TwUser.Screen_Name, sess)
-	var sid, first, last int64
+	var sid int64
+	var first, last time.Time
 	for k, v := range *tl {
 		tmpTime, _ := time.Parse(time.RubyDate, v.Created_at)
-		tmpSec := tmpTime.Seconds()
 		if du.UTC_Offset != nil {
-			tmpSec += *du.UTC_Offset
-			v.Created_at = time.SecondsToUTC(tmpSec).Format(time.RubyDate)
+			tmpTime = tmpTime.Add(time.Duration(*du.UTC_Offset * int64(time.Second)))
+			v.Created_at = tmpTime.Format(time.RubyDate)
 		}
 		if k == 0 {
 			sid = v.Id
-			last = tmpSec
+			last = tmpTime
 		}
 		addStats(sa, &v, resolveURL)
 		if k == (len(*tl) - 1) {
-			first = tmpSec
+			first = tmpTime
 		}
-		//log.Printf("id:%d", v.Id)
 	}
 	sa.Foreach(update)
 	// decide to the next execution time
-	du.SinceId = strconv.Itoa64(sid)
-	du.NextSeconds = time.Seconds() + (last - first)
+	du.SinceId = strconv.FormatInt(sid, 10)
+	du.NextSeconds = time.Now().Unix() + int64(last.Sub(first).Seconds())
 	if _, err := du.Upsert(sess); err != nil {
 		log.Print(err)
 	}

@@ -1,10 +1,9 @@
 package main
 
 import (
-	"http"
-	"url"
-	"os"
 	"net"
+	"net/http"
+	"net/url"
 )
 
 const (
@@ -21,8 +20,8 @@ var (
 	}
 )
 
-func timeoutDialler(ns int64) func(net, addr string) (c net.Conn, err os.Error) {
-	return func(netw, addr string) (net.Conn, os.Error) {
+func timeoutDialler(ns int64) func(net, addr string) (c net.Conn, err error) {
+	return func(netw, addr string) (net.Conn, error) {
 		c, err := net.Dial(netw, addr)
 		if err != nil {
 			return nil, err
@@ -33,7 +32,7 @@ func timeoutDialler(ns int64) func(net, addr string) (c net.Conn, err os.Error) 
 }
 
 // GetFinalURL resolves a URL to a URL which represents a final location
-func GetFinalURL(url string) (*url.URL, os.Error) {
+func GetFinalURL(url string) (*url.URL, error) {
 	res, err := DigestHttpClient.Head(url)
 	if err != nil {
 		return nil, err

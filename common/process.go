@@ -1,10 +1,10 @@
 package main
 
 import (
-	"os"
-	"strconv"
-	"path/filepath"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strconv"
 )
 
 const (
@@ -13,13 +13,19 @@ const (
 	PL_UMASK_PID_FILE    = 0644
 )
 
+type ProcessExistError struct{}
+
+func (*ProcessExistError) Error() string {
+	return "Process exists"
+}
+
 var (
-	ProcessExist = os.NewError("Process exists")
+	ProcessExist = &ProcessExistError{}
 )
 
 type ProcessLocker interface {
-	Lock() os.Error
-	Unlock() os.Error
+	Lock() error
+	Unlock() error
 }
 
 type DirProcessLocker struct {
@@ -36,11 +42,11 @@ func (dpl *DirProcessLocker) getPidFilePath() string {
 	return filepath.Join(dpl.DirName, PL_PID_FNAME)
 }
 
-func (dpl *DirProcessLocker) Lock() os.Error {
+func (dpl *DirProcessLocker) Lock() error {
 	fpid := dpl.getPidFilePath()
 	if err := os.Mkdir(dpl.DirName, PL_UMASK_PID_LOCKDIR); err != nil {
 		perr := err.(*os.PathError)
-		if perr.Error != os.EEXIST {
+		if perr.Err != os.EEXIST {
 			return err
 		}
 		// check whether if the process truely exists or not(might go down by unexpected errors or something else...)
@@ -62,7 +68,7 @@ func (dpl *DirProcessLocker) Lock() os.Error {
 	return nil
 }
 
-func (dpl *DirProcessLocker) Unlock() os.Error {
+func (dpl *DirProcessLocker) Unlock() error {
 	return os.RemoveAll(dpl.DirName)
 }
 
@@ -73,7 +79,7 @@ func (p Pid) IsExist() bool {
 	if fi, err := os.Lstat(procfs); err != nil {
 		return false
 	} else {
-		return fi.IsDirectory()
+		return fi.IsDir()
 	}
 	// unreached
 	panic("unreached")

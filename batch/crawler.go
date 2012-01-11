@@ -1,17 +1,18 @@
 package main
 
 import (
-	"os"
 	"flag"
 	"fmt"
-	"log"
-	"time"
-	"github.com/mrjones/oauth"
+	oauth "github.com/alloy-d/goauth"
 	"launchpad.net/mgo"
+	"log"
+	"os"
+	"time"
 )
 
 const (
 	MODE_TEST      = "test"
+	MODE_REG_USER  = "user"
 	MODE_OAUTH_OOB = "oauth"
 	MODE_DEFAULT   = "default"
 )
@@ -22,6 +23,12 @@ func main() {
 	var mongoUrl *string = flag.String("mongourl", "xxx", "")
 	var count *int = flag.Int("count", 100, "")
 	var mode *string = flag.String("mode", "default", "")
+	uid := flag.Int64("uid", 0, "")
+	screen_name := flag.String("screen_name", "xxx", "")
+	profile_image_url := flag.String("profile_image_url", "xxx", "")
+	utc_offset := flag.Int64("utc_offset", 0, "")
+	token := flag.String("token", "xxx", "")
+	secret := flag.String("secret", "xxx", "")
 
 	flag.Parse()
 
@@ -36,15 +43,15 @@ func main() {
 	defer dl.Unlock()
 
 	// init
-	c := oauth.NewConsumer(
-		*consumerKey,
-		*consumerSecret,
-		oauth.ServiceProvider{
-			RequestTokenUrl:   "https://api.twitter.com/oauth/request_token",
-			AuthorizeTokenUrl: "https://api.twitter.com/oauth/authorize",
-			AccessTokenUrl:    "https://api.twitter.com/oauth/access_token",
-		})
-	//c.Debug(true)
+	c := &oauth.OAuth{
+		ConsumerKey:     *consumerKey,
+		ConsumerSecret:  *consumerSecret,
+		RequestTokenURL: "https://api.twitter.com/oauth/request_token",
+		OwnerAuthURL:    "https://api.twitter.com/oauth/authorize",
+		AccessTokenURL:  "https://api.twitter.com/oauth/access_token",
+		Callback:        "oob",
+		SignatureMethod: oauth.HMAC_SHA1,
+	}
 	mgPool, err := mgo.Mongo(*mongoUrl)
 	if err != nil {
 		log.Fatal(err)
@@ -52,6 +59,18 @@ func main() {
 	defer mgPool.Close()
 
 	switch *mode {
+	case MODE_REG_USER:
+		tu := &TwUser{
+			Id:                *uid,
+			Screen_Name:       *screen_name,
+			Profile_Image_Url: profile_image_url,
+			UTC_Offset:        utc_offset,
+		}
+		if du, err := RegistUser(mgPool, tu, *token, *secret); err != nil {
+			log.Fatal(err)
+		} else {
+			fmt.Println("id:" + du.TwUser.Screen_Name)
+		}
 	case MODE_TEST:
 		var tl TwTimeLine
 		if err := tl.Get(os.Stdin); err != nil {
@@ -63,7 +82,11 @@ func main() {
 		go Crawl(mgPool, &du, &tl, true, done)
 		<-done
 	case MODE_OAUTH_OOB:
-		requestToken, url, err := c.GetRequestTokenAndUrl("oob")
+		err = c.GetRequestToken()
+		if err != nil {
+			log.Fatal(err)
+		}
+		url, err := c.AuthorizationURL()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -72,15 +95,15 @@ func main() {
 		fmt.Println("(3) Enter that verification code here: ")
 		verificationCode := ""
 		fmt.Scanln(&verificationCode)
-		accessToken, err := c.AuthorizeToken(requestToken, verificationCode)
+		err = c.GetAccessToken(verificationCode)
 		if err != nil {
 			log.Fatal(err)
 		}
 		var tu TwUser
-		if err := tu.GetFromAPI(c, accessToken); err != nil {
+		if err := tu.GetFromAPI(c); err != nil {
 			log.Fatal(err)
 		}
-		if du, err := RegistUser(mgPool, &tu, accessToken); err != nil {
+		if du, err := RegistUser(mgPool, &tu, c.AccessToken(), c.AccessSecret()); err != nil {
 			log.Fatal(err)
 		} else {
 			fmt.Println("id:" + du.TwUser.Screen_Name)
@@ -91,10 +114,12 @@ func main() {
 		done := make(chan int)
 		for true {
 			idx = 0
-			iter := dulist[0].Find(mgPool, time.Seconds())
+			iter := dulist[0].Find(mgPool, time.Now().Unix())
 			for iter.Next(&dulist[idx]) {
 				var tl TwTimeLine
-				if err := tl.GetFromAPI(c, &dulist[idx].AccessToken, *count, dulist[idx].SinceId); err != nil {
+				c.SetAccessToken(dulist[idx].Token)
+				c.SetAccessSecret(dulist[idx].Secret)
+				if err := tl.GetFromAPI(c, *count, dulist[idx].SinceId); err != nil {
 					log.Println(err)
 					continue
 				}

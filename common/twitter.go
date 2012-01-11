@@ -1,12 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"strconv"
-	"json"
+	oauth "github.com/alloy-d/goauth"
 	"io"
-	"os"
-	"github.com/mrjones/oauth"
+	"io/ioutil"
+	"strconv"
 )
 
 const (
@@ -25,23 +25,27 @@ type TwStatus struct {
 
 type TwTimeLine []TwStatus
 
-func (tl *TwTimeLine) Get(r io.Reader) os.Error {
-	dec := json.NewDecoder(r)
-	if err := dec.Decode(tl); err != nil {
+func (tl *TwTimeLine) Get(r io.Reader) error {
+	buf, err := ioutil.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	// for debug
+	// fmt.Print(string(buf))
+	if err := json.Unmarshal(buf, tl); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tl *TwTimeLine) GetFromAPI(c *oauth.Consumer, at *oauth.AccessToken, count int, sinceId string) os.Error {
+func (tl *TwTimeLine) GetFromAPI(c *oauth.OAuth, count int, sinceId string) error {
 	params := map[string]string{"include_entities": "true", "count": strconv.Itoa(count)}
 	if sinceId != "" && sinceId != "0" {
 		params["since_id"] = sinceId
 	}
 	response, err := c.Get(
 		TW_URL_HOME_TIMELINE,
-		params,
-		at)
+		params)
 	if err != nil {
 		return err
 	}
@@ -84,7 +88,7 @@ type TwUser struct {
 	UTC_Offset        *int64
 }
 
-func (user *TwUser) Get(r io.Reader) os.Error {
+func (user *TwUser) Get(r io.Reader) error {
 	dec := json.NewDecoder(r)
 	if err := dec.Decode(user); err != nil {
 		return err
@@ -92,11 +96,10 @@ func (user *TwUser) Get(r io.Reader) os.Error {
 	return nil
 }
 
-func (user *TwUser) GetFromAPI(c *oauth.Consumer, at *oauth.AccessToken) os.Error {
+func (user *TwUser) GetFromAPI(c *oauth.OAuth) error {
 	response, err := c.Get(
 		TW_URL_VERIFY_CREDENTIAL,
-		map[string]string{"skip_status": "true"},
-		at)
+		map[string]string{"skip_status": "true"})
 	if err != nil {
 		return err
 	}
